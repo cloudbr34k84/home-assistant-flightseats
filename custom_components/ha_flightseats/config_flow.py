@@ -14,6 +14,7 @@ from homeassistant.config_entries import (
     SubentryFlowResult,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     BooleanSelector,
@@ -73,6 +74,7 @@ from .const import (
     SCHEDULED_RESERVE,
     SUBENTRY_TYPE_WATCH,
 )
+from .airports import AIRPORTS
 from .matching import count_permutations, parse_codes, valid_codes
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,6 +86,27 @@ _CABIN_LABELS = {
     "BUS": "Business",
     "FIR": "First",
 }
+
+
+# Form layout: essentials at the top level, the rest in sections. Integration forms cannot
+# place fields side by side, but sections keep the page short.
+SECTION_FILTERS = "filters"
+SECTION_DATES = "dates"
+SECTION_SCHEDULE = "schedule"
+SECTION_FIELDS = {
+    SECTION_FILTERS: (CONF_CABINS, CONF_MIN_SEATS, CONF_MAX_POINTS, CONF_REWARD_ONLY),
+    SECTION_DATES: (CONF_DAYS_AHEAD, CONF_DATE_FROM, CONF_DATE_TO),
+    SECTION_SCHEDULE: (CONF_INTERVAL_HOURS, CONF_COOLDOWN_HOURS),
+}
+_SECTIONED = {field for fields in SECTION_FIELDS.values() for field in fields}
+
+
+def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Merge the section dictionaries into one flat dictionary."""
+    flat = {key: value for key, value in user_input.items() if key not in SECTION_FIELDS}
+    for name in SECTION_FIELDS:
+        flat.update(user_input.get(name) or {})
+    return flat
 
 
 async def _async_validate_key(hass: HomeAssistant, api_key: str) -> str | None:
@@ -215,6 +238,18 @@ def _select(values: list[str], labels: dict[str, str]) -> SelectSelector:
     )
 
 
+def _airport_select() -> SelectSelector:
+    """A searchable multi-select of common airports that also accepts any typed code."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[SelectOptionDict(value=code, label=label) for code, label in AIRPORTS.items()],
+            multiple=True,
+            custom_value=True,
+            mode=SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
 def _auto_name(origins: list[str], destinations: list[str], cabins: list[str]) -> str:
     def _short(codes: list[str]) -> str:
         if len(codes) <= 3:
@@ -251,6 +286,7 @@ class WatchSubentryFlow(ConfigSubentryFlow):
 
         errors: dict[str, str] = {}
         if user_input is not None:
+            user_input = _flatten(user_input)
             data, errors = self._validate(
                 entry, user_input, ignore=subentry.subentry_id if subentry else None
             )
@@ -298,6 +334,14 @@ class WatchSubentryFlow(ConfigSubentryFlow):
     ) -> tuple[dict[str, Any], dict[str, str]]:
         """Normalise the form and return (stored data, errors)."""
         errors: dict[str, str] = {}
+
+        def _error(field: str, code: str) -> None:
+            # Errors on fields inside a (possibly collapsed) section show at the top instead.
+            if field in _SECTIONED:
+                errors.setdefault("base", code)
+            else:
+                errors[field] = code
+
         programs = list(user_input.get(CONF_PROGRAMS) or [])
         origins = parse_codes(user_input.get(CONF_ORIGINS))
         destinations = parse_codes(user_input.get(CONF_DESTINATIONS))
@@ -312,19 +356,19 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         today = dt_util.utcnow().date()
 
         if not programs:
-            errors[CONF_PROGRAMS] = "no_programs"
+            _error(CONF_PROGRAMS, "no_programs")
         elif min_seats > max(PROGRAM_MAX_SEATS[p] for p in programs):
-            errors[CONF_MIN_SEATS] = "too_many_seats"
+            _error(CONF_MIN_SEATS, "too_many_seats")
         if not valid_codes(origins):
-            errors[CONF_ORIGINS] = "invalid_codes"
+            _error(CONF_ORIGINS, "invalid_codes")
         if not valid_codes(destinations):
-            errors[CONF_DESTINATIONS] = "invalid_codes"
+            _error(CONF_DESTINATIONS, "invalid_codes")
         if days_ahead and (date_from or date_to):
-            errors[CONF_DAYS_AHEAD] = "date_conflict"
+            _error(CONF_DAYS_AHEAD, "date_conflict")
         elif date_from and date_to and date_to < date_from:
-            errors[CONF_DATE_TO] = "date_order"
+            _error(CONF_DATE_TO, "date_order")
         elif not days_ahead and date_to and date_to < today:
-            errors[CONF_DATE_TO] = "window_in_past"
+            _error(CONF_DATE_TO, "window_in_past")
 
         if not errors:
             permutations = count_permutations(
@@ -340,7 +384,7 @@ class WatchSubentryFlow(ConfigSubentryFlow):
             else:
                 used, allowed = self._budget_numbers(entry, ignore)
                 if used + 24 / interval > allowed:
-                    errors[CONF_INTERVAL_HOURS] = "over_budget"
+                    _error(CONF_INTERVAL_HOURS, "over_budget")
 
         data = {
             CONF_PROGRAMS: programs,
@@ -360,53 +404,40 @@ class WatchSubentryFlow(ConfigSubentryFlow):
 
     @staticmethod
     def _schema(defaults: Mapping[str, Any]) -> vol.Schema:
-        """Build the form, pre-filled from defaults."""
-
-        def _text(value: Any) -> str:
-            if isinstance(value, list):
-                return ", ".join(value)
-            return value or ""
+        """Build the form, pre-filled from defaults (a flat dictionary)."""
 
         def _suggest(key: str) -> dict[str, Any]:
             value = defaults.get(key)
             return {"suggested_value": value} if value not in (None, "", []) else {}
 
-        return vol.Schema(
+        filters = vol.Schema(
             {
-                vol.Optional(CONF_NAME, description=_suggest(CONF_NAME)): TextSelector(),
-                vol.Required(
-                    CONF_PROGRAMS, default=defaults.get(CONF_PROGRAMS) or DEFAULT_PROGRAMS
-                ): _select(PROGRAMS, _PROGRAM_LABELS),
-                vol.Required(
-                    CONF_ORIGINS,
-                    description={"suggested_value": _text(defaults.get(CONF_ORIGINS))},
-                ): TextSelector(),
-                vol.Required(
-                    CONF_DESTINATIONS,
-                    description={"suggested_value": _text(defaults.get(CONF_DESTINATIONS))},
-                ): TextSelector(),
-                vol.Optional(
-                    CONF_CABINS, description=_suggest(CONF_CABINS)
-                ): _select(CABINS, _CABIN_LABELS),
+                vol.Optional(CONF_CABINS, description=_suggest(CONF_CABINS)): _select(
+                    CABINS, _CABIN_LABELS
+                ),
                 vol.Required(
                     CONF_MIN_SEATS, default=defaults.get(CONF_MIN_SEATS) or DEFAULT_MIN_SEATS
                 ): _number(1, max(PROGRAM_MAX_SEATS.values())),
-                vol.Optional(
-                    CONF_MAX_POINTS, description=_suggest(CONF_MAX_POINTS)
-                ): _number(0, 2_000_000, 1000),
-                vol.Optional(
-                    CONF_DAYS_AHEAD, description=_suggest(CONF_DAYS_AHEAD)
-                ): _number(0, MAX_DAYS_AHEAD),
-                vol.Optional(
-                    CONF_DATE_FROM, description=_suggest(CONF_DATE_FROM)
-                ): DateSelector(),
-                vol.Optional(
-                    CONF_DATE_TO, description=_suggest(CONF_DATE_TO)
-                ): DateSelector(),
+                vol.Optional(CONF_MAX_POINTS, description=_suggest(CONF_MAX_POINTS)): _number(
+                    0, 2_000_000, 1000
+                ),
                 vol.Required(
                     CONF_REWARD_ONLY,
                     default=defaults.get(CONF_REWARD_ONLY, DEFAULT_REWARD_ONLY),
                 ): BooleanSelector(),
+            }
+        )
+        dates = vol.Schema(
+            {
+                vol.Optional(CONF_DAYS_AHEAD, description=_suggest(CONF_DAYS_AHEAD)): _number(
+                    0, MAX_DAYS_AHEAD
+                ),
+                vol.Optional(CONF_DATE_FROM, description=_suggest(CONF_DATE_FROM)): DateSelector(),
+                vol.Optional(CONF_DATE_TO, description=_suggest(CONF_DATE_TO)): DateSelector(),
+            }
+        )
+        schedule = vol.Schema(
+            {
                 vol.Required(
                     CONF_INTERVAL_HOURS,
                     default=defaults.get(CONF_INTERVAL_HOURS) or DEFAULT_INTERVAL_HOURS,
@@ -415,5 +446,23 @@ class WatchSubentryFlow(ConfigSubentryFlow):
                     CONF_COOLDOWN_HOURS,
                     default=defaults.get(CONF_COOLDOWN_HOURS, DEFAULT_COOLDOWN_HOURS),
                 ): _number(0, 168),
+            }
+        )
+        return vol.Schema(
+            {
+                vol.Optional(CONF_NAME, description=_suggest(CONF_NAME)): TextSelector(),
+                vol.Required(
+                    CONF_PROGRAMS, default=defaults.get(CONF_PROGRAMS) or DEFAULT_PROGRAMS
+                ): _select(PROGRAMS, _PROGRAM_LABELS),
+                vol.Required(
+                    CONF_ORIGINS, description={"suggested_value": defaults.get(CONF_ORIGINS) or []}
+                ): _airport_select(),
+                vol.Required(
+                    CONF_DESTINATIONS,
+                    description={"suggested_value": defaults.get(CONF_DESTINATIONS) or []},
+                ): _airport_select(),
+                vol.Required(SECTION_FILTERS): section(filters, {"collapsed": False}),
+                vol.Required(SECTION_DATES): section(dates, {"collapsed": True}),
+                vol.Required(SECTION_SCHEDULE): section(schedule, {"collapsed": True}),
             }
         )

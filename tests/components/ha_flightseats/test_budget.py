@@ -65,3 +65,17 @@ async def test_state_round_trip_and_listener():
     assert calls == [1]
     restored = QuotaBudget(budget.as_dict())
     assert restored.remaining == 149
+
+
+async def test_remaining_unknown_until_api_confirms():
+    budget = QuotaBudget()
+    assert budget.remaining_if_known is None  # a shared count must not be guessed
+    budget.update(RateLimit(limit=200, remaining=185, reset=4_102_444_800))
+    assert budget.remaining_if_known == 185
+    assert budget.as_of is not None
+    assert QuotaBudget(budget.as_dict()).remaining_if_known == 185
+
+
+async def test_new_day_assumes_full_allowance_until_next_response():
+    budget = QuotaBudget({"limit": 200, "remaining": 12, "reset": 1_000_000_000, "as_of": "2001-01-01T00:00:00+00:00"})
+    assert budget.remaining_if_known == 200

@@ -200,9 +200,13 @@ class AccountSensorDescription(SensorEntityDescription):
 
 def _remaining_attrs(budget: QuotaBudget) -> dict[str, Any]:
     reset_at = budget.reset_at
+    known = budget.as_of is not None
     return {
         "daily_limit": budget.limit,
-        "used_today": budget.used_today,
+        # The count is shared with the website and any other project using the key, so it is
+        # only as fresh as the last API response.
+        "as_of": budget.as_of.isoformat() if budget.as_of else None,
+        "used_today": budget.used_today if known else None,
         "resets_at": reset_at.isoformat() if reset_at else None,
         "last_request_at": (
             budget.last_request_at.isoformat() if budget.last_request_at else None
@@ -219,7 +223,7 @@ ACCOUNT_SENSORS: tuple[AccountSensorDescription, ...] = (
         translation_key="requests_remaining",
         entity_category=EntityCategory.DIAGNOSTIC,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda budget: budget.effective_remaining,
+        value_fn=lambda budget: budget.remaining_if_known,
         attrs_fn=_remaining_attrs,
     ),
     AccountSensorDescription(

@@ -53,6 +53,10 @@ class QuotaBudget:
             if saved.get("last_request_at")
             else None
         )
+        # When the remaining count last came from the API; None until the first response.
+        self.as_of: datetime | None = (
+            dt_util.parse_datetime(saved["as_of"]) if saved.get("as_of") else None
+        )
         self.watches_polling: int = 0
         self.estimated_daily_usage: float = 0.0
         self._lock = asyncio.Lock()
@@ -71,6 +75,7 @@ class QuotaBudget:
             "reset": self.reset,
             "requests_today": self.requests_today,
             "counted_day": self.counted_day,
+            "as_of": self.as_of.isoformat() if self.as_of else None,
             "last_request_at": (
                 self.last_request_at.isoformat() if self.last_request_at else None
             ),
@@ -107,7 +112,9 @@ class QuotaBudget:
             self.counted_day = today
             self.requests_today = 0
         if self.reset is not None and dt_util.utcnow().timestamp() >= self.reset:
-            self.remaining = None
+            # A new day has started: assume a full allowance until the next response says otherwise.
+            self.remaining = self.limit
+            self.as_of = dt_util.utc_from_timestamp(self.reset)
             self.reset = None
 
     @property
@@ -117,6 +124,11 @@ class QuotaBudget:
         if self.remaining is not None:
             return self.remaining
         return max(self.limit - self.requests_today, 0)
+
+    @property
+    def remaining_if_known(self) -> int | None:
+        """Return the remaining count, or None before the API has ever confirmed it."""
+        return self.effective_remaining if self.as_of is not None else None
 
     @property
     def used_today(self) -> int:
@@ -173,6 +185,7 @@ class QuotaBudget:
             self.limit = rate_limit.limit
         if rate_limit.remaining is not None:
             self.remaining = rate_limit.remaining
+            self.as_of = dt_util.utcnow()
         if rate_limit.reset is not None:
             self.reset = rate_limit.reset
         self._changed()

@@ -20,7 +20,7 @@ Account device **FlightSeats.io API** (diagnostic):
 
 | Entity | Notes |
 |---|---|
-| Requests remaining today | From the API's rate-limit headers; attributes show limit, used, reset time and estimated daily use |
+| Requests remaining today | From the API's rate-limit headers, so it is `unknown` until the first check and only as fresh as the last response (`as_of` attribute). Other projects using the same key count against it too |
 | Quota resets at | Timestamp (UTC midnight) |
 | Daily request limit | Disabled by default |
 
@@ -60,10 +60,10 @@ Copy `custom_components/ha_flightseats` into your Home Assistant `custom_compone
 1. Settings, Devices & services, **Add integration**, **FlightSeats.io**.
 2. Paste your API key (create it under *API Access* in your FlightSeats.io dashboard). Checking the key uses one request.
 3. On the integration page choose **Add watch** and fill in the form:
-   - **Origins / destinations**: airport codes separated by commas (up to 30 each).
-   - **Date window**: *Days ahead* for a rolling window, or *From/To* for fixed dates, or leave all empty for the program's full search horizon. The API rejects searches where origins x destinations x days is over 10,000; the form checks this for you.
-   - **Minimum seats**, **cabins**, **maximum points**, **reward fares only**.
-   - **Check every (hours)** and **alert cooldown**.
+   - **Origins / destinations**: pick one or more airports from the searchable list (about 240 common ones, including every Australian and New Zealand airport with scheduled service), or type any 3-letter IATA code. Up to 30 each.
+   - **Filters** section: cabins, minimum seats, maximum points, reward fares only.
+   - **Date window** section (collapsed): *Days ahead* for a rolling window, or *From/To* for fixed dates, or leave all empty for the program's full search horizon. The API rejects searches where origins x destinations x days is over 10,000; the form checks this for you.
+   - **Schedule and alerts** section (collapsed): how often to check and the alert cooldown.
 
 ### Quota: 200 requests a day, shared
 

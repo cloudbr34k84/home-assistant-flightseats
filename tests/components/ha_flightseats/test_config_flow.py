@@ -1,4 +1,9 @@
 """Tests for the config flow and the watch subentry flow."""
+try:  # Home Assistant 2026.10 serialises forms with probatio
+    from probatio import to_field_list as serialise
+except ImportError:  # older versions use voluptuous-serialize
+    from voluptuous_serialize import convert as serialise
+
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -81,17 +86,29 @@ async def test_reauth_updates_key(hass: HomeAssistant, aioclient_mock, mock_entr
     assert mock_entry.data[CONF_API_KEY] == "fs_live_new"
 
 
+SECTIONS = {
+    "filters": ("cabins", CONF_MIN_SEATS, "max_points", CONF_REWARD_ONLY),
+    "dates": (CONF_DAYS_AHEAD, "date_from", "date_to"),
+    "schedule": (CONF_INTERVAL_HOURS, CONF_COOLDOWN_HOURS),
+}
+
+
 def _watch_input(**overrides):
-    base = {
+    """Build form input as the UI sends it: top-level fields plus section dictionaries."""
+    flat = {
         CONF_PROGRAMS: ["QF"],
-        CONF_ORIGINS: "syd, mel",
-        CONF_DESTINATIONS: "LAX",
+        CONF_ORIGINS: ["syd", "mel"],
+        CONF_DESTINATIONS: ["LAX"],
         CONF_MIN_SEATS: 2,
         CONF_REWARD_ONLY: True,
         CONF_INTERVAL_HOURS: 6,
         CONF_COOLDOWN_HOURS: 12,
+        **overrides,
     }
-    return {**base, **overrides}
+    nested = {k: v for k, v in flat.items() if not any(k in f for f in SECTIONS.values())}
+    for name, fields in SECTIONS.items():
+        nested[name] = {k: flat[k] for k in fields if k in flat}
+    return nested
 
 
 async def _add_watch(hass, entry, user_input):
@@ -115,12 +132,13 @@ async def test_add_watch(hass: HomeAssistant, aioclient_mock, mock_entry):
 
 async def test_watch_validation_errors(hass: HomeAssistant, aioclient_mock, mock_entry):
     await setup_entry(hass, mock_entry, aioclient_mock, payload())
+    # Fields inside sections report at the top ("base"); top-level fields report inline.
     cases = [
-        (_watch_input(**{CONF_ORIGINS: "SYDNEY"}), CONF_ORIGINS, "invalid_codes"),
+        (_watch_input(**{CONF_ORIGINS: ["SYDNEY"]}), CONF_ORIGINS, "invalid_codes"),
         (_watch_input(**{CONF_PROGRAMS: []}), CONF_PROGRAMS, "no_programs"),
-        (_watch_input(**{CONF_PROGRAMS: ["QF"], CONF_MIN_SEATS: 7}), CONF_MIN_SEATS, "too_many_seats"),
-        (_watch_input(**{CONF_DAYS_AHEAD: 30, "date_from": "2027-01-01"}), CONF_DAYS_AHEAD, "date_conflict"),
-        (_watch_input(**{"date_from": "2027-05-01", "date_to": "2027-04-01"}), "date_to", "date_order"),
+        (_watch_input(**{CONF_PROGRAMS: ["QF"], CONF_MIN_SEATS: 7}), "base", "too_many_seats"),
+        (_watch_input(**{CONF_DAYS_AHEAD: 30, "date_from": "2027-01-01"}), "base", "date_conflict"),
+        (_watch_input(**{"date_from": "2027-05-01", "date_to": "2027-04-01"}), "base", "date_order"),
     ]
     for user_input, field, error in cases:
         result = await _add_watch(hass, mock_entry, user_input)
@@ -131,10 +149,10 @@ async def test_watch_validation_errors(hass: HomeAssistant, aioclient_mock, mock
 
 async def test_watch_too_many_permutations(hass: HomeAssistant, aioclient_mock, mock_entry):
     await setup_entry(hass, mock_entry, aioclient_mock, payload())
-    many = ",".join(f"A{c}{d}" for c in "ABCDEFGH" for d in "ABCD")  # 32 codes: too many
+    many = [f"A{c}{d}" for c in "ABCDEFGH" for d in "ABCD"]  # 32 codes: too many
     result = await _add_watch(hass, mock_entry, _watch_input(**{CONF_ORIGINS: many}))
     assert result["errors"][CONF_ORIGINS] == "invalid_codes"
-    ten = ",".join(f"A{c}{d}" for c in "AB" for d in "ABCDE")  # 10 x 10 x 365
+    ten = [f"A{c}{d}" for c in "AB" for d in "ABCDE"]  # 10 x 10 x 365
     result = await _add_watch(
         hass, mock_entry, _watch_input(**{CONF_ORIGINS: ten, CONF_DESTINATIONS: ten})
     )
@@ -150,7 +168,7 @@ async def test_reconfigure_watch(hass: HomeAssistant, aioclient_mock, mock_entry
     )
     assert result["step_id"] == "reconfigure"
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], _watch_input(**{"name": "Renamed", CONF_INTERVAL_HOURS: 12})
+        result["flow_id"], {**_watch_input(**{CONF_INTERVAL_HOURS: 12}), "name": "Renamed"}
     )
     assert result["type"] is FlowResultType.ABORT
     assert mock_entry.subentries[subentry_id].title == "Renamed"
@@ -179,4 +197,28 @@ async def test_over_budget(hass: HomeAssistant, aioclient_mock):
     await setup_entry(hass, entry, aioclient_mock, payload())
     result = await _add_watch(hass, entry, _watch_input())
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {CONF_INTERVAL_HOURS: "over_budget"}
+    assert result["errors"] == {"base": "over_budget"}
+
+
+async def test_form_serialises_with_sections_and_airports(
+    hass: HomeAssistant, aioclient_mock, mock_entry
+):
+    """The form must serialise the way the frontend receives it."""
+    from homeassistant.helpers import config_validation as cv
+
+    await setup_entry(hass, mock_entry, aioclient_mock, payload())
+    result = await hass.config_entries.subentries.async_init(
+        (mock_entry.entry_id, SUBENTRY_TYPE_WATCH), context={"source": config_entries.SOURCE_USER}
+    )
+    fields = serialise(result["data_schema"], custom_serializer=cv.custom_serializer)
+    by_name = {field["name"]: field for field in fields}
+    assert [f["name"] for f in fields][:4] == ["name", "programs", "origins", "destinations"]
+    assert by_name["filters"]["type"] == "expandable"
+    assert by_name["filters"]["expanded"] is True
+    assert by_name["dates"]["expanded"] is False
+    assert by_name["dates"]["type"] == "expandable"
+    origins = by_name["origins"]["selector"]["select"]
+    assert origins["multiple"] and origins["custom_value"]
+    assert {"value": "SYD", "label": "SYD – Sydney, AU"} in origins["options"]
+    assert len(origins["options"]) > 200
+    assert result["description_placeholders"]["allowed"] == "190"

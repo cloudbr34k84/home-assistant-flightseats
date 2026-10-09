@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Add watch form: Origins and Destinations are now a searchable multi-select of about 240 common airports (any other 3-letter code can still be typed). Filters, Date window and Schedule and alerts are grouped into sections, with the last two collapsed.
+- `Requests remaining today` is `unknown` until the API has reported the shared count, and has an `as_of` attribute, instead of showing a full allowance that other projects using the same key may already have spent.
+
 ## 0.1.0
 
 First release.
