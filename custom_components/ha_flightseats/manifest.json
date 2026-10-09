@@ -1,0 +1,15 @@
+{
+  "domain": "ha_flightseats",
+  "name": "FlightSeats.io",
+  "codeowners": [
+    "@cloudbr34k84"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/cloudbr34k84/home-assistant-flightseats",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/cloudbr34k84/home-assistant-flightseats/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

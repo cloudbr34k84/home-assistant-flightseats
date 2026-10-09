@@ -1,0 +1,401 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FlightSeats.io API",
+    "version": "1.0.0",
+    "description": "Gold-only REST API for searching cached Qantas and Virgin Velocity reward seat availability. Results come from the same cache that powers the FlightSeats.io Reward Seat Finder and include a `lastSeen` timestamp on each flight. This is cached data, not live airline inventory.\n\n## Getting started\nCreate an API key from the API Access section of your [dashboard](https://flightseats.io/dashboard?tab=api) (Gold plan, verified email). Your key is shown in full only once — store it securely. Then call the search endpoint:\n\n```bash curl \"https://flightseats.io/api/v1/search?programs=QF&origins=SYD&destinations=LAX&date_from=2027-03-01&date_to=2027-03-31&cabins=BUS&seats=2\" \\\n  -H \"Authorization: Bearer fs_live_your_key_here\"\n```\n\n## Authentication\nSend your API key as a Bearer token:\n`Authorization: Bearer fs_live_xxxxxxxx...`\nRequests without a valid key return `401`; keys on a non-Gold account return `403`.\n\n## Requesting multiple routes\n`origins` and `destinations` each accept one or more IATA codes — repeat the parameter (`origins=SYD&origins=MEL`) or comma-separate (`origins=SYD,MEL`). Origins × destinations × inclusive days in the date range must be 10,000 or fewer per request; larger searches return `400` and should be split into batches. Each of `origins` and `destinations` may have at most 30 codes. `date_from` and `date_to` are optional: omitted `date_from` defaults to today (UTC); omitted `date_to` defaults to the program search horizon.\n\n## Rate limits\nLimits are per Gold account, shared across all of that account's keys:\n- 200 requests per UTC day - 10 requests per minute\nEvery response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (UTC epoch seconds). Exceeding a limit returns `429`.\n\n## Data freshness\nResults reflect the last time each route/date was seen on the airline site. Every flight includes that `lastSeen` timestamp. Availability can change at any time — always confirm on the airline's site before booking.\n\n## Acceptable use\nPersonal or internal use only. Do not resell, redistribute in bulk, or use the data to build a competing product. Keys are confidential; access may be revoked for abuse. See the [Terms & Conditions](https://flightseats.io/privacy-policy).\n"
+  },
+  "servers": [
+    {
+      "url": "https://flightseats.io"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/v1/search": {
+      "get": {
+        "operationId": "searchCachedSeats",
+        "summary": "Search cached reward-seat availability",
+        "description": "Returns cached reward-seat availability for one or both programs (QF, VA) across one or more origins and destinations within a date range.\n\nOrigins × destinations × inclusive days must be 10,000 or fewer per request; split larger searches into multiple calls. Each of `origins` and `destinations` may have at most 30 codes. `date_from` and `date_to` are optional.\n",
+        "parameters": [
+          {
+            "name": "programs",
+            "in": "query",
+            "required": true,
+            "description": "One or more frequent flyer programs: `QF` (Qantas) and/or `VA` (Virgin Velocity). Repeat the parameter (`programs=QF&programs=VA`) or comma-separate (`programs=QF,VA`).\n",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "QF",
+                  "VA"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "example": [
+              "QF"
+            ]
+          },
+          {
+            "name": "origins",
+            "in": "query",
+            "required": true,
+            "description": "One or more origin IATA codes. Repeat the parameter (`origins=SYD&origins=MEL`) or comma-separate (`origins=SYD,MEL`).\n",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z]{3}$"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "example": [
+              "SYD",
+              "MEL"
+            ]
+          },
+          {
+            "name": "destinations",
+            "in": "query",
+            "required": true,
+            "description": "One or more destination IATA codes (same format as origins).",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z]{3}$"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "example": [
+              "LAX"
+            ]
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2027-03-01",
+            "description": "Start of the departure-date range (inclusive), YYYY-MM-DD. Defaults to today (UTC) if omitted.\n"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2027-03-31",
+            "description": "End of the departure-date range (inclusive), YYYY-MM-DD. Defaults to the search horizon for the selected programs if omitted. Origins × destinations × inclusive days (`date_from` through `date_to`) must be 10,000 or fewer.\n"
+          },
+          {
+            "name": "cabins",
+            "in": "query",
+            "required": false,
+            "description": "Restrict to one or more cabins. Repeat or comma-separate. Defaults to all cabins.\n",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "ECO",
+                  "PRM",
+                  "BUS",
+                  "FIR"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "seats",
+            "in": "query",
+            "required": false,
+            "description": "Minimum seats required per fare. Default 1. Max 6 (QF) or 9 (VA). If both programs are requested, each is searched up to its own max.\n",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of flights to return. Default 500. Must be an integer between 1 and 1000. Extra matches beyond this cap are omitted.\n",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 500
+            }
+          },
+          {
+            "name": "reward_only",
+            "in": "query",
+            "required": false,
+            "description": "When true (default), only classic/fixed reward fares are returned. Set to `false` to include non-reward (e.g. Classic Plus) fares.\n",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching cached availability.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Daily request limit."
+              },
+              "X-RateLimit-Remaining": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Remaining requests for the current UTC day."
+              },
+              "X-RateLimit-Reset": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "UTC epoch seconds when the daily limit resets."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (bad params, or permutations > 10,000).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, or revoked API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account is not on an active Gold plan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (daily or per-minute).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "fs_live_"
+      }
+    },
+    "schemas": {
+      "SearchResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Flight"
+            }
+          }
+        }
+      },
+      "Flight": {
+        "type": "object",
+        "properties": {
+          "program": {
+            "type": "string",
+            "enum": [
+              "QF",
+              "VA"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "example": "SYD"
+          },
+          "destination": {
+            "type": "string",
+            "example": "LAX"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "example": "2027-03-15"
+          },
+          "lastSeen": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When this flight's route/date was last seen on the airline site.\n"
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "nullable": true,
+            "example": 840
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            }
+          },
+          "fares": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Fare"
+            }
+          }
+        }
+      },
+      "Segment": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "example": "SYD"
+          },
+          "destination": {
+            "type": "string",
+            "example": "LAX"
+          },
+          "marketingCarrier": {
+            "type": "string",
+            "example": "QF"
+          },
+          "operatingCarrier": {
+            "type": "string",
+            "example": "QF"
+          },
+          "flightNumber": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "example": 11
+          },
+          "departure": {
+            "type": "string",
+            "example": "2027-03-15T10:30"
+          },
+          "arrival": {
+            "type": "string",
+            "example": "2027-03-15T06:45"
+          }
+        }
+      },
+      "Fare": {
+        "type": "object",
+        "properties": {
+          "cabin": {
+            "type": "string",
+            "enum": [
+              "ECO",
+              "PRM",
+              "BUS",
+              "FIR"
+            ]
+          },
+          "seats": {
+            "type": "integer",
+            "example": 2
+          },
+          "points": {
+            "type": "integer",
+            "example": 192000
+          },
+          "tax": {
+            "type": "number",
+            "example": 890
+          },
+          "currency": {
+            "type": "string",
+            "example": "AUD"
+          },
+          "isReward": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "bad_request",
+                  "unauthorized",
+                  "forbidden",
+                  "rate_limited",
+                  "internal"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

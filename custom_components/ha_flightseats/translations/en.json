@@ -1,0 +1,264 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to FlightSeats.io",
+        "description": "Enter your FlightSeats.io API key. Checking it uses one request from your daily allowance. After setup, add watches from the integration page.",
+        "data": {
+          "api_key": "API key"
+        },
+        "data_description": {
+          "api_key": "Create a key in the API Access section of your FlightSeats.io dashboard. It starts with fs_live_."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate FlightSeats.io",
+        "description": "The API key was rejected. Enter a new key.",
+        "data": {
+          "api_key": "API key"
+        },
+        "data_description": {
+          "api_key": "Create a key in the API Access section of your FlightSeats.io dashboard. It starts with fs_live_."
+        }
+      },
+      "reconfigure": {
+        "title": "Replace the API key",
+        "description": "Enter the new API key. Checking it uses one request.",
+        "data": {
+          "api_key": "API key"
+        },
+        "data_description": {
+          "api_key": "Create a key in the API Access section of your FlightSeats.io dashboard. It starts with fs_live_."
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The API key was rejected. Check it and try again.",
+      "not_gold": "This account is not on an active FlightSeats.io Gold plan, which the API requires.",
+      "rate_limited": "FlightSeats.io says the request limit has been reached. Try again later.",
+      "cannot_connect": "Unable to reach FlightSeats.io. Check your network connection.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant logs."
+    },
+    "abort": {
+      "already_configured": "FlightSeats.io is already set up.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "The API key was updated."
+    }
+  },
+  "config_subentries": {
+    "watch": {
+      "initiate_flow": {
+        "user": "Add watch"
+      },
+      "entry_type": "Watch",
+      "step": {
+        "user": {
+          "title": "Add a watch",
+          "description": "Other watches already use about {used} of {allowed} requests per day. The allowance is shared with the FlightSeats.io website and any other API keys.",
+          "data": {
+            "name": "Name",
+            "programs": "Programs",
+            "origins": "Origins",
+            "destinations": "Destinations",
+            "cabins": "Cabins",
+            "min_seats": "Minimum seats",
+            "max_points": "Maximum points",
+            "days_ahead": "Days ahead",
+            "date_from": "From date",
+            "date_to": "To date",
+            "reward_only": "Reward fares only",
+            "interval_hours": "Check every (hours)",
+            "cooldown_hours": "Alert cooldown (hours)"
+          },
+          "data_description": {
+            "name": "Optional. Leave blank to name the watch after its route, e.g. SYD → LAX BUS.",
+            "programs": "Qantas (QF) and/or Virgin Australia Velocity (VA).",
+            "origins": "Airport codes separated by commas, e.g. SYD, MEL. Up to 30.",
+            "destinations": "Airport codes separated by commas, e.g. LAX. Up to 30.",
+            "cabins": "Leave empty to match any cabin.",
+            "min_seats": "Only fares with at least this many seats count as a match. Qantas allows up to 6, Velocity up to 9.",
+            "max_points": "Optional. Fares costing more points than this are ignored. Leave empty or 0 for no limit.",
+            "days_ahead": "Optional. A rolling window from today. Use this or the two dates below, not both. Leave all three empty to use the program's full search horizon.",
+            "date_from": "Optional start of a fixed departure window.",
+            "date_to": "Optional end of a fixed departure window.",
+            "reward_only": "Only classic/fixed reward fares. Turn off to include non-reward fares such as Classic Plus.",
+            "interval_hours": "Each check uses one request from the shared 200 per day allowance.",
+            "cooldown_hours": "A seat that disappears and returns within this time does not raise a second new availability event."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit watch",
+          "description": "Other watches already use about {used} of {allowed} requests per day. The allowance is shared with the FlightSeats.io website and any other API keys.",
+          "data": {
+            "name": "Name",
+            "programs": "Programs",
+            "origins": "Origins",
+            "destinations": "Destinations",
+            "cabins": "Cabins",
+            "min_seats": "Minimum seats",
+            "max_points": "Maximum points",
+            "days_ahead": "Days ahead",
+            "date_from": "From date",
+            "date_to": "To date",
+            "reward_only": "Reward fares only",
+            "interval_hours": "Check every (hours)",
+            "cooldown_hours": "Alert cooldown (hours)"
+          },
+          "data_description": {
+            "name": "Optional. Leave blank to name the watch after its route, e.g. SYD → LAX BUS.",
+            "programs": "Qantas (QF) and/or Virgin Australia Velocity (VA).",
+            "origins": "Airport codes separated by commas, e.g. SYD, MEL. Up to 30.",
+            "destinations": "Airport codes separated by commas, e.g. LAX. Up to 30.",
+            "cabins": "Leave empty to match any cabin.",
+            "min_seats": "Only fares with at least this many seats count as a match. Qantas allows up to 6, Velocity up to 9.",
+            "max_points": "Optional. Fares costing more points than this are ignored. Leave empty or 0 for no limit.",
+            "days_ahead": "Optional. A rolling window from today. Use this or the two dates below, not both. Leave all three empty to use the program's full search horizon.",
+            "date_from": "Optional start of a fixed departure window.",
+            "date_to": "Optional end of a fixed departure window.",
+            "reward_only": "Only classic/fixed reward fares. Turn off to include non-reward fares such as Classic Plus.",
+            "interval_hours": "Each check uses one request from the shared 200 per day allowance.",
+            "cooldown_hours": "A seat that disappears and returns within this time does not raise a second new availability event."
+          }
+        }
+      },
+      "error": {
+        "no_programs": "Choose at least one program.",
+        "too_many_seats": "None of the chosen programs allows that many seats.",
+        "invalid_codes": "Enter between 1 and 30 three-letter airport codes, separated by commas.",
+        "date_conflict": "Use either days ahead or the from/to dates, not both.",
+        "date_order": "The to date must not be before the from date.",
+        "window_in_past": "The to date has already passed.",
+        "too_many_permutations": "Origins × destinations × days is over the API limit of 10,000. Use fewer airports or a shorter window.",
+        "over_budget": "With this interval the watches would use more than the daily request allowance. Increase the interval or remove a watch."
+      },
+      "abort": {
+        "reconfigure_successful": "The watch was updated."
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "seats_available": {
+        "name": "Seats available"
+      }
+    },
+    "button": {
+      "check_now": {
+        "name": "Check now"
+      }
+    },
+    "event": {
+      "availability": {
+        "name": "Availability",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_availability": "New availability",
+              "availability_gone": "Availability gone",
+              "price_drop": "Price drop"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "best_points": {
+        "name": "Best points"
+      },
+      "best_taxes": {
+        "name": "Taxes for best fare"
+      },
+      "matching_flights": {
+        "name": "Matching flights"
+      },
+      "data_freshness": {
+        "name": "Data freshness"
+      },
+      "earliest_date": {
+        "name": "Earliest date"
+      },
+      "requests_remaining": {
+        "name": "Requests remaining today"
+      },
+      "quota_resets_at": {
+        "name": "Quota resets at"
+      },
+      "daily_limit": {
+        "name": "Daily request limit"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "FlightSeats.io rejected the API key."
+    },
+    "not_gold": {
+      "message": "The FlightSeats.io account is not on an active Gold plan."
+    },
+    "quota_low": {
+      "message": "Only {remaining} requests are left today, which is below the safety reserve. Try again after the daily reset."
+    },
+    "rate_limited": {
+      "message": "FlightSeats.io says the request limit has been reached."
+    },
+    "not_loaded": {
+      "message": "FlightSeats.io is not set up or has not finished loading."
+    },
+    "invalid_codes": {
+      "message": "Origins and destinations must each be 1 to 30 three-letter airport codes."
+    },
+    "too_many_permutations": {
+      "message": "Origins × destinations × days is {count}, over the API limit of 10,000."
+    }
+  },
+  "issues": {
+    "not_gold": {
+      "title": "FlightSeats.io needs a Gold plan",
+      "description": "FlightSeats.io refused the request because the account is not on an active Gold plan. Upgrade the plan or replace the API key with one from a Gold account. This repair clears itself after the next successful check."
+    }
+  },
+  "services": {
+    "search": {
+      "name": "Search",
+      "description": "Searches cached reward seat availability once and returns the flights. Uses one request from the daily allowance.",
+      "fields": {
+        "origins": {
+          "name": "Origins",
+          "description": "Airport codes separated by commas, e.g. SYD, MEL."
+        },
+        "destinations": {
+          "name": "Destinations",
+          "description": "Airport codes separated by commas, e.g. LAX."
+        },
+        "programs": {
+          "name": "Programs",
+          "description": "Qantas (QF) and/or Virgin Australia Velocity (VA)."
+        },
+        "date_from": {
+          "name": "From date",
+          "description": "Start of the departure window. Defaults to today."
+        },
+        "date_to": {
+          "name": "To date",
+          "description": "End of the departure window. Defaults to the program's search horizon."
+        },
+        "cabins": {
+          "name": "Cabins",
+          "description": "Leave empty for all cabins."
+        },
+        "seats": {
+          "name": "Minimum seats",
+          "description": "Only fares with at least this many seats."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Maximum number of flights returned."
+        },
+        "reward_only": {
+          "name": "Reward fares only",
+          "description": "Exclude non-reward fares."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "seats_available": {
+        "default": "mdi:airplane-off",
+        "state": {
+          "on": "mdi:airplane-check"
+        }
+      }
+    },
+    "button": {
+      "check_now": {
+        "default": "mdi:airplane-search"
+      }
+    },
+    "event": {
+      "availability": {
+        "default": "mdi:airplane-clock"
+      }
+    },
+    "sensor": {
+      "best_points": {
+        "default": "mdi:star-circle"
+      },
+      "best_taxes": {
+        "default": "mdi:cash"
+      },
+      "matching_flights": {
+        "default": "mdi:airplane-takeoff"
+      },
+      "data_freshness": {
+        "default": "mdi:database-clock"
+      },
+      "earliest_date": {
+        "default": "mdi:calendar-start"
+      },
+      "requests_remaining": {
+        "default": "mdi:counter"
+      },
+      "quota_resets_at": {
+        "default": "mdi:timer-refresh"
+      },
+      "daily_limit": {
+        "default": "mdi:gauge"
+      }
+    }
+  },
+  "services": {
+    "search": {
+      "service": "mdi:airplane-search"
+    }
+  }
+}

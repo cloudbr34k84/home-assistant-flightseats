@@ -1,0 +1,59 @@
+search:
+  fields:
+    origins:
+      required: true
+      example: "SYD, MEL"
+      selector:
+        text:
+    destinations:
+      required: true
+      example: "LAX"
+      selector:
+        text:
+    programs:
+      default: ["QF", "VA"]
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Qantas
+              value: QF
+            - label: Virgin Australia Velocity
+              value: VA
+    date_from:
+      selector:
+        date:
+    date_to:
+      selector:
+        date:
+    cabins:
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Economy
+              value: ECO
+            - label: Premium Economy
+              value: PRM
+            - label: Business
+              value: BUS
+            - label: First
+              value: FIR
+    seats:
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 9
+          mode: box
+    limit:
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 200
+          mode: box
+    reward_only:
+      default: true
+      selector:
+        boolean:
