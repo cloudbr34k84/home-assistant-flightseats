@@ -4,9 +4,10 @@ from __future__ import annotations
 import logging
 
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
@@ -15,7 +16,7 @@ from .budget import QuotaBudget
 from .const import CONF_API_KEY, DOMAIN, SUBENTRY_TYPE_WATCH
 from .coordinator import FlightSeatsWatchCoordinator
 from .data import FlightSeatsConfigEntry, FlightSeatsData
-from .entity import account_device_info
+from .entity import ENTITY_ID_SUFFIX, account_device_info
 from .services import async_setup_services
 from .storage import FlightSeatsStore
 
@@ -82,11 +83,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: FlightSeatsConfigEntry) 
         entry.async_on_unload(coordinator.async_shutdown)
         await coordinator.async_refresh()
 
+    _async_migrate_entity_ids(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Adding, editing or removing a watch (a subentry) reloads the entry.
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
+
+
+@callback
+def _async_migrate_entity_ids(hass: HomeAssistant, entry: FlightSeatsConfigEntry) -> None:
+    """Give watch entities created before 0.1.2 the _flightseats ID suffix (history is kept)."""
+    registry = er.async_get(hass)
+    suffix = f"_{ENTITY_ID_SUFFIX}"
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if entity.config_subentry_id is None or entity.entity_id.endswith(suffix):
+            continue  # account entities already carry the name; renamed ones are done
+        new_id = f"{entity.entity_id}{suffix}"
+        if registry.async_get(new_id) is not None:
+            continue
+        _LOGGER.info("Renaming %s to %s", entity.entity_id, new_id)
+        registry.async_update_entity(entity.entity_id, new_entity_id=new_id)
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: FlightSeatsConfigEntry) -> None:

@@ -16,6 +16,8 @@ Version 0.1 covers watches, sensors, change events and quota protection. History
 
 ### Entities
 
+Watch entity IDs end with `_flightseats` (for example `sensor.syd_lax_bus_best_points_flightseats`) so they are easy to search for. The quota diagnostics live on the **FlightSeats.io API** device.
+
 Account device **FlightSeats.io API** (diagnostic):
 
 | Entity | Notes |

@@ -8,6 +8,8 @@ from .const import DOMAIN
 from .coordinator import FlightSeatsWatchCoordinator
 
 MANUFACTURER = "FlightSeats.io"
+# Appended to every watch entity's ID so they are easy to find: sensor.syd_lax_bus_best_points_flightseats
+ENTITY_ID_SUFFIX = "flightseats"
 
 
 def account_device_info(entry_id: str) -> DeviceInfo:
@@ -26,6 +28,12 @@ class FlightSeatsWatchEntity(CoordinatorEntity[FlightSeatsWatchCoordinator]):
     """Base class for entities that belong to one watch."""
 
     _attr_has_entity_name = True
+
+    @property
+    def suggested_object_id(self) -> str | None:
+        """End the entity ID with _flightseats; friendly names are unchanged."""
+        base = super().suggested_object_id
+        return f"{base}_{ENTITY_ID_SUFFIX}" if base else base
 
     def __init__(self, coordinator: FlightSeatsWatchCoordinator, key: str) -> None:
         """Set the unique id and the watch's device."""

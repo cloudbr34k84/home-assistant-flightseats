@@ -13,13 +13,13 @@ from custom_components.ha_flightseats.const import DOMAIN, ISSUE_NOT_GOLD
 
 from .conftest import SEARCH_URL, flight, payload, rate_headers, setup_entry
 
-BEST_POINTS = "sensor.syd_lax_bus_best_points"
-TAXES = "sensor.syd_lax_bus_taxes_for_best_fare"
-MATCHING = "sensor.syd_lax_bus_matching_flights"
-FRESHNESS = "sensor.syd_lax_bus_data_freshness"
-SEATS = "binary_sensor.syd_lax_bus_seats_available"
-EVENT = "event.syd_lax_bus_availability"
-BUTTON = "button.syd_lax_bus_check_now"
+BEST_POINTS = "sensor.syd_lax_bus_best_points_flightseats"
+TAXES = "sensor.syd_lax_bus_taxes_for_best_fare_flightseats"
+MATCHING = "sensor.syd_lax_bus_matching_flights_flightseats"
+FRESHNESS = "sensor.syd_lax_bus_data_freshness_flightseats"
+SEATS = "binary_sensor.syd_lax_bus_seats_available_flightseats"
+EVENT = "event.syd_lax_bus_availability_flightseats"
+BUTTON = "button.syd_lax_bus_check_now_flightseats"
 REMAINING = "sensor.flightseats_io_api_requests_remaining_today"
 
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Watch entity IDs now end with `_flightseats` (for example `sensor.syd_hkg_bus_best_points_flightseats`), so they are easy to find in searches and pickers. Friendly names are unchanged.
+- Watch entities created by 0.1.0 and 0.1.1 are renamed automatically on the first start; their history is kept. Anything that refers to the old IDs (dashboards, automations) needs updating.
+
 ## 0.1.1
 
 - Add watch form: Origins and Destinations are now a searchable multi-select of about 240 common airports (any other 3-letter code can still be typed). Filters, Date window and Schedule and alerts are grouped into sections, with the last two collapsed.
