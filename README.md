@@ -1,3 +1,5 @@
+<p align="center"><img src="custom_components/ha_flightseats/brand/logo@2x.png" alt="FlightSeats.io for Home Assistant" width="220"></p>
+
 # FlightSeats.io for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
