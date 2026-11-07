@@ -1,4 +1,6 @@
 [tool.pytest.ini_options]
+# respx imports legacy httpx before Home Assistant can install its httpx2 alias.
+addopts = "-p no:respx"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 
