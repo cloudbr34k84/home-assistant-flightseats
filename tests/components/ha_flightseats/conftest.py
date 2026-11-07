@@ -1,4 +1,5 @@
 """Fixtures and helpers for the FlightSeats.io tests."""
+
 from __future__ import annotations
 
 import re
@@ -10,8 +11,8 @@ import pytest
 from homeassistant.config_entries import ConfigSubentryData
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
+from pytest_homeassistant.common import MockConfigEntry
+from pytest_homeassistant.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.ha_flightseats.const import (
     CONF_API_KEY,

@@ -1,4 +1,5 @@
 """FlightSeats.io integration: watch cached Qantas and Velocity reward seats."""
+
 from __future__ import annotations
 
 import logging
@@ -92,7 +93,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: FlightSeatsConfigEntry) 
 
 
 @callback
-def _async_migrate_entity_ids(hass: HomeAssistant, entry: FlightSeatsConfigEntry) -> None:
+def _async_migrate_entity_ids(
+    hass: HomeAssistant, entry: FlightSeatsConfigEntry
+) -> None:
     """Give watch entities created before 0.1.2 the _flightseats ID suffix (history is kept)."""
     registry = er.async_get(hass)
     suffix = f"_{ENTITY_ID_SUFFIX}"
@@ -106,12 +109,16 @@ def _async_migrate_entity_ids(hass: HomeAssistant, entry: FlightSeatsConfigEntry
         registry.async_update_entity(entity.entity_id, new_entity_id=new_id)
 
 
-async def _async_reload_entry(hass: HomeAssistant, entry: FlightSeatsConfigEntry) -> None:
+async def _async_reload_entry(
+    hass: HomeAssistant, entry: FlightSeatsConfigEntry
+) -> None:
     """Reload after the entry or one of its subentries changed."""
     hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: FlightSeatsConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant, entry: FlightSeatsConfigEntry
+) -> bool:
     """Unload the platforms and flush saved state."""
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
@@ -119,6 +126,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: FlightSeatsConfigEntry)
     return unloaded
 
 
-async def async_remove_entry(hass: HomeAssistant, entry: FlightSeatsConfigEntry) -> None:
+async def async_remove_entry(
+    hass: HomeAssistant, entry: FlightSeatsConfigEntry
+) -> None:
     """Delete saved state when the account is removed."""
     await FlightSeatsStore(hass, entry.entry_id).async_remove()

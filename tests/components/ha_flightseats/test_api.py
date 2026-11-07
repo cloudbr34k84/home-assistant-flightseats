@@ -1,4 +1,5 @@
 """Tests for the API client."""
+
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -15,7 +16,9 @@ from custom_components.ha_flightseats.api import (
 
 from .conftest import SEARCH_URL, flight, payload, rate_headers
 
-PARAMS = SearchParams(programs=["QF", "VA"], origins=["SYD", "MEL"], destinations=["LAX"])
+PARAMS = SearchParams(
+    programs=["QF", "VA"], origins=["SYD", "MEL"], destinations=["LAX"]
+)
 
 
 def _client(hass: HomeAssistant) -> FlightSeatsClient:

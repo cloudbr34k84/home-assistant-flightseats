@@ -1,4 +1,5 @@
 """Tests for the shared request budget."""
+
 import pytest
 
 from custom_components.ha_flightseats.api import RateLimit
@@ -23,7 +24,9 @@ async def test_headers_are_authoritative():
 
 async def test_scheduled_stops_at_reserve_manual_continues():
     budget = QuotaBudget()
-    budget.update(RateLimit(limit=200, remaining=SCHEDULED_RESERVE, reset=4_102_444_800))
+    budget.update(
+        RateLimit(limit=200, remaining=SCHEDULED_RESERVE, reset=4_102_444_800)
+    )
     with pytest.raises(QuotaLowError):
         await budget.acquire()
     await budget.acquire(manual=True)  # reserve is for manual use
@@ -77,5 +80,12 @@ async def test_remaining_unknown_until_api_confirms():
 
 
 async def test_new_day_assumes_full_allowance_until_next_response():
-    budget = QuotaBudget({"limit": 200, "remaining": 12, "reset": 1_000_000_000, "as_of": "2001-01-01T00:00:00+00:00"})
+    budget = QuotaBudget(
+        {
+            "limit": 200,
+            "remaining": 12,
+            "reset": 1_000_000_000,
+            "as_of": "2001-01-01T00:00:00+00:00",
+        }
+    )
     assert budget.remaining_if_known == 200

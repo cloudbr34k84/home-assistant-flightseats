@@ -3,3 +3,10 @@ __pycache__/
 .pytest_cache/
 .claude/
 .env
+.venv/
+.ruff_cache/
+.coverage
+htmlcov/
+.env.*
+test-results/
+release-notes.md

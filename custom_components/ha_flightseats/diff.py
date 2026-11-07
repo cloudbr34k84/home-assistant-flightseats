@@ -9,6 +9,7 @@ Rules:
   new_availability event.
 * Events are coalesced: at most one event per type per poll.
 """
+
 from __future__ import annotations
 
 from copy import deepcopy

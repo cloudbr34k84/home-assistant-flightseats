@@ -62,7 +62,7 @@
             "destinations": "Destinations"
           },
           "data_description": {
-            "name": "Optional. Defaults to the route, e.g. SYD → LAX BUS.",
+            "name": "Optional. Defaults to the route, e.g. SYD \u2192 LAX BUS.",
             "programs": "Qantas, Virgin Australia Velocity, or both.",
             "origins": "Pick one or more airports, or type any 3-letter code.",
             "destinations": "Pick one or more airports, or type any 3-letter code."
@@ -122,7 +122,7 @@
             "destinations": "Destinations"
           },
           "data_description": {
-            "name": "Optional. Defaults to the route, e.g. SYD → LAX BUS.",
+            "name": "Optional. Defaults to the route, e.g. SYD \u2192 LAX BUS.",
             "programs": "Qantas, Virgin Australia Velocity, or both.",
             "origins": "Pick one or more airports, or type any 3-letter code.",
             "destinations": "Pick one or more airports, or type any 3-letter code."
@@ -180,8 +180,11 @@
         "date_conflict": "Use either days ahead or the from/to dates, not both.",
         "date_order": "The to date must not be before the from date.",
         "window_in_past": "The to date has already passed.",
-        "too_many_permutations": "Origins × destinations × days is over the API limit of 10,000. Use fewer airports or a shorter window.",
-        "over_budget": "With this interval the watches would use more than the daily request allowance. Increase the interval or remove a watch."
+        "too_many_permutations": "Origins \u00d7 destinations \u00d7 days is over the API limit of 10,000. Use fewer airports or a shorter window.",
+        "over_budget": "With this interval the watches would use more than the daily request allowance. Increase the interval or remove a watch.",
+        "invalid_number": "Enter a whole number within the allowed range.",
+        "invalid_date": "Enter a valid date.",
+        "invalid_cabins": "Select supported cabins."
       },
       "abort": {
         "reconfigure_successful": "The watch was updated."
@@ -260,7 +263,13 @@
       "message": "Origins and destinations must each be 1 to 30 three-letter airport codes."
     },
     "too_many_permutations": {
-      "message": "Origins × destinations × days is {count}, over the API limit of 10,000."
+      "message": "Origins \u00d7 destinations \u00d7 days is {count}, over the API limit of 10,000."
+    },
+    "invalid_dates": {
+      "message": "The date window must be ordered and must not end in the past."
+    },
+    "invalid_programs": {
+      "message": "Select at least one supported program."
     }
   },
   "issues": {

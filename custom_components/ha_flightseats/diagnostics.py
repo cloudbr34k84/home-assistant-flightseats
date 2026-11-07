@@ -1,4 +1,5 @@
 """Diagnostics for the FlightSeats.io integration."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -22,8 +23,10 @@ async def async_get_config_entry_diagnostics(
     for subentry_id, coordinator in runtime.coordinators.items():
         data = coordinator.data
         watches[subentry_id] = {
-            "title": coordinator.watch_name,
-            "config": dict(entry.subentries[subentry_id].data),
+            "config": async_redact_data(
+                dict(entry.subentries[subentry_id].data),
+                {"origins", "destinations", "date_from", "date_to", "name"},
+            ),
             "last_update_success": coordinator.last_update_success,
             "update_interval_hours": (
                 coordinator.update_interval.total_seconds() / 3600

@@ -1,4 +1,5 @@
 """Per-watch data update coordinator."""
+
 from __future__ import annotations
 
 import logging
@@ -114,6 +115,10 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
 
     async def _async_update_data(self) -> WatchData:
         """Return fresh data, saved data, or the last data when the quota is low."""
+        today = dt_util.utcnow().date()
+        if self.config.is_expired(today):
+            return WatchData([], summarise([]), None, 0, True, expired=True)
+
         fallback = self.data
         if fallback is None:
             restored = self._restore()
@@ -121,16 +126,10 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
                 return restored
             fallback = restored
 
-        today = dt_util.utcnow().date()
-        if self.config.is_expired(today):
-            return WatchData([], summarise([]), None, 0, True, expired=True)
-
         try:
             await self._budget.acquire(manual=self._manual)
         except QuotaLowError as err:
-            _LOGGER.info(
-                "Skipping poll of %s: %s", self.watch_name, err
-            )
+            _LOGGER.info("Skipping poll of %s: %s", self.watch_name, err)
             self._schedule_catch_up()
             return fallback or WatchData([], summarise([]), None, 0, True)
 
@@ -185,7 +184,10 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
         """Keep the last data through brief outages; fail after repeated ones."""
         self._failures += 1
         self.update_interval = min(_RETRY_INTERVAL, self._normal_interval)
-        if fallback is not None and self._failures < TRANSIENT_FAILURES_BEFORE_UNAVAILABLE:
+        if (
+            fallback is not None
+            and self._failures < TRANSIENT_FAILURES_BEFORE_UNAVAILABLE
+        ):
             _LOGGER.warning(
                 "Poll of %s failed (%s); keeping the last data", self.watch_name, err
             )
@@ -204,6 +206,8 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
         matches = saved.get("matches")
         if fetched is None or not isinstance(matches, list):
             return None
+        if fetched.tzinfo is None:
+            fetched = fetched.replace(tzinfo=dt_util.UTC)
         return WatchData(
             matches=matches,
             summary=summarise(matches),

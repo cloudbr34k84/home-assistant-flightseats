@@ -1,7 +1,9 @@
 """Config flow: the API key (one per account) and watches (subentries)."""
+
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -32,6 +34,7 @@ from homeassistant.helpers.selector import (
 )
 from homeassistant.util import dt as dt_util
 
+from .airports import AIRPORTS
 from .api import (
     FlightSeatsAuthError,
     FlightSeatsBadRequestError,
@@ -74,7 +77,6 @@ from .const import (
     SCHEDULED_RESERVE,
     SUBENTRY_TYPE_WATCH,
 )
-from .airports import AIRPORTS
 from .matching import count_permutations, parse_codes, valid_codes
 
 _LOGGER = logging.getLogger(__name__)
@@ -103,7 +105,9 @@ _SECTIONED = {field for fields in SECTION_FIELDS.values() for field in fields}
 
 def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
     """Merge the section dictionaries into one flat dictionary."""
-    flat = {key: value for key, value in user_input.items() if key not in SECTION_FIELDS}
+    flat = {
+        key: value for key, value in user_input.items() if key not in SECTION_FIELDS
+    }
     for name in SECTION_FIELDS:
         flat.update(user_input.get(name) or {})
     return flat
@@ -131,8 +135,8 @@ async def _async_validate_key(hass: HomeAssistant, api_key: str) -> str | None:
         return "rate_limited"
     except FlightSeatsConnectionError:
         return "cannot_connect"
-    except (FlightSeatsBadRequestError, FlightSeatsError):
-        _LOGGER.exception("Unexpected response while validating the API key")
+    except FlightSeatsBadRequestError, FlightSeatsError:
+        _LOGGER.warning("Unexpected response while validating the API key")
         return "unknown"
     return None
 
@@ -242,7 +246,10 @@ def _airport_select() -> SelectSelector:
     """A searchable multi-select of common airports that also accepts any typed code."""
     return SelectSelector(
         SelectSelectorConfig(
-            options=[SelectOptionDict(value=code, label=label) for code, label in AIRPORTS.items()],
+            options=[
+                SelectOptionDict(value=code, label=label)
+                for code, label in AIRPORTS.items()
+            ],
             multiple=True,
             custom_value=True,
             mode=SelectSelectorMode.DROPDOWN,
@@ -279,7 +286,9 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         self, step_id: str, user_input: dict[str, Any] | None
     ) -> SubentryFlowResult:
         entry = self._get_entry()
-        subentry = self._get_reconfigure_subentry() if step_id == "reconfigure" else None
+        subentry = (
+            self._get_reconfigure_subentry() if step_id == "reconfigure" else None
+        )
         defaults: dict[str, Any] = {}
         if subentry is not None:
             defaults = {**subentry.data, CONF_NAME: subentry.title}
@@ -346,18 +355,50 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         origins = parse_codes(user_input.get(CONF_ORIGINS))
         destinations = parse_codes(user_input.get(CONF_DESTINATIONS))
         cabins = list(user_input.get(CONF_CABINS) or [])
-        min_seats = int(user_input.get(CONF_MIN_SEATS) or DEFAULT_MIN_SEATS)
-        max_points = int(user_input.get(CONF_MAX_POINTS) or 0) or None
-        days_ahead = int(user_input.get(CONF_DAYS_AHEAD) or 0) or None
+
+        def _integer(key: str, default: int, minimum: int, maximum: int) -> int:
+            value = user_input.get(key)
+            try:
+                number = float(default if value in (None, "") else value)
+                if (
+                    not math.isfinite(number)
+                    or not number.is_integer()
+                    or not minimum <= number <= maximum
+                ):
+                    raise ValueError
+                return int(number)
+            except TypeError, ValueError, OverflowError:
+                _error(key, "invalid_number")
+                return default
+
+        min_seats = _integer(
+            CONF_MIN_SEATS, DEFAULT_MIN_SEATS, 1, max(PROGRAM_MAX_SEATS.values())
+        )
+        max_points = _integer(CONF_MAX_POINTS, 0, 0, 2_000_000) or None
+        days_ahead = _integer(CONF_DAYS_AHEAD, 0, 0, MAX_DAYS_AHEAD) or None
+        interval = _integer(
+            CONF_INTERVAL_HOURS,
+            DEFAULT_INTERVAL_HOURS,
+            MIN_INTERVAL_HOURS,
+            MAX_INTERVAL_HOURS,
+        )
+        cooldown = _integer(CONF_COOLDOWN_HOURS, DEFAULT_COOLDOWN_HOURS, 0, 168)
         date_from = dt_util.parse_date(user_input.get(CONF_DATE_FROM) or "")
         date_to = dt_util.parse_date(user_input.get(CONF_DATE_TO) or "")
-        interval = int(user_input.get(CONF_INTERVAL_HOURS) or DEFAULT_INTERVAL_HOURS)
-        cooldown = int(user_input.get(CONF_COOLDOWN_HOURS) or 0)
+        for key, parsed in ((CONF_DATE_FROM, date_from), (CONF_DATE_TO, date_to)):
+            if user_input.get(key) and parsed is None:
+                _error(key, "invalid_date")
+        if any(program not in PROGRAMS for program in programs):
+            _error(CONF_PROGRAMS, "no_programs")
+        if any(cabin not in CABINS for cabin in cabins):
+            _error(CONF_CABINS, "invalid_cabins")
         today = dt_util.utcnow().date()
 
         if not programs:
             _error(CONF_PROGRAMS, "no_programs")
-        elif min_seats > max(PROGRAM_MAX_SEATS[p] for p in programs):
+        elif all(p in PROGRAM_MAX_SEATS for p in programs) and min_seats > max(
+            PROGRAM_MAX_SEATS[p] for p in programs
+        ):
             _error(CONF_MIN_SEATS, "too_many_seats")
         if not valid_codes(origins):
             _error(CONF_ORIGINS, "invalid_codes")
@@ -396,7 +437,9 @@ class WatchSubentryFlow(ConfigSubentryFlow):
             CONF_DAYS_AHEAD: days_ahead,
             CONF_DATE_FROM: date_from.isoformat() if date_from else None,
             CONF_DATE_TO: date_to.isoformat() if date_to else None,
-            CONF_REWARD_ONLY: bool(user_input.get(CONF_REWARD_ONLY, DEFAULT_REWARD_ONLY)),
+            CONF_REWARD_ONLY: bool(
+                user_input.get(CONF_REWARD_ONLY, DEFAULT_REWARD_ONLY)
+            ),
             CONF_INTERVAL_HOURS: interval,
             CONF_COOLDOWN_HOURS: cooldown,
         }
@@ -416,11 +459,12 @@ class WatchSubentryFlow(ConfigSubentryFlow):
                     CABINS, _CABIN_LABELS
                 ),
                 vol.Required(
-                    CONF_MIN_SEATS, default=defaults.get(CONF_MIN_SEATS) or DEFAULT_MIN_SEATS
+                    CONF_MIN_SEATS,
+                    default=defaults.get(CONF_MIN_SEATS) or DEFAULT_MIN_SEATS,
                 ): _number(1, max(PROGRAM_MAX_SEATS.values())),
-                vol.Optional(CONF_MAX_POINTS, description=_suggest(CONF_MAX_POINTS)): _number(
-                    0, 2_000_000, 1000
-                ),
+                vol.Optional(
+                    CONF_MAX_POINTS, description=_suggest(CONF_MAX_POINTS)
+                ): _number(0, 2_000_000, 1000),
                 vol.Required(
                     CONF_REWARD_ONLY,
                     default=defaults.get(CONF_REWARD_ONLY, DEFAULT_REWARD_ONLY),
@@ -429,11 +473,15 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         )
         dates = vol.Schema(
             {
-                vol.Optional(CONF_DAYS_AHEAD, description=_suggest(CONF_DAYS_AHEAD)): _number(
-                    0, MAX_DAYS_AHEAD
-                ),
-                vol.Optional(CONF_DATE_FROM, description=_suggest(CONF_DATE_FROM)): DateSelector(),
-                vol.Optional(CONF_DATE_TO, description=_suggest(CONF_DATE_TO)): DateSelector(),
+                vol.Optional(
+                    CONF_DAYS_AHEAD, description=_suggest(CONF_DAYS_AHEAD)
+                ): _number(0, MAX_DAYS_AHEAD),
+                vol.Optional(
+                    CONF_DATE_FROM, description=_suggest(CONF_DATE_FROM)
+                ): DateSelector(),
+                vol.Optional(
+                    CONF_DATE_TO, description=_suggest(CONF_DATE_TO)
+                ): DateSelector(),
             }
         )
         schedule = vol.Schema(
@@ -450,16 +498,22 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         )
         return vol.Schema(
             {
-                vol.Optional(CONF_NAME, description=_suggest(CONF_NAME)): TextSelector(),
+                vol.Optional(
+                    CONF_NAME, description=_suggest(CONF_NAME)
+                ): TextSelector(),
                 vol.Required(
-                    CONF_PROGRAMS, default=defaults.get(CONF_PROGRAMS) or DEFAULT_PROGRAMS
+                    CONF_PROGRAMS,
+                    default=defaults.get(CONF_PROGRAMS) or DEFAULT_PROGRAMS,
                 ): _select(PROGRAMS, _PROGRAM_LABELS),
                 vol.Required(
-                    CONF_ORIGINS, description={"suggested_value": defaults.get(CONF_ORIGINS) or []}
+                    CONF_ORIGINS,
+                    description={"suggested_value": defaults.get(CONF_ORIGINS) or []},
                 ): _airport_select(),
                 vol.Required(
                     CONF_DESTINATIONS,
-                    description={"suggested_value": defaults.get(CONF_DESTINATIONS) or []},
+                    description={
+                        "suggested_value": defaults.get(CONF_DESTINATIONS) or []
+                    },
                 ): _airport_select(),
                 vol.Required(SECTION_FILTERS): section(filters, {"collapsed": False}),
                 vol.Required(SECTION_DATES): section(dates, {"collapsed": True}),

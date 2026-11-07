@@ -1,4 +1,5 @@
 """Button: check a watch now."""
+
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity

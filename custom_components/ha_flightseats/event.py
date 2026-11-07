@@ -1,4 +1,5 @@
 """Event entity: new availability, price drops and seats that went away."""
+
 from __future__ import annotations
 
 from homeassistant.components.event import EventEntity

@@ -1,4 +1,5 @@
 """Binary sensor: are there matching reward seats right now."""
+
 from __future__ import annotations
 
 from typing import Any

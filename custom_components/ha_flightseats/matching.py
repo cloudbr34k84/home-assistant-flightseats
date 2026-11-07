@@ -1,4 +1,5 @@
 """Watch configuration and matching of API results against it."""
+
 from __future__ import annotations
 
 import re
@@ -12,7 +13,6 @@ from homeassistant.util import dt as dt_util
 from .api import Flight, SearchParams
 from .const import (
     ASSUMED_HORIZON_DAYS,
-    MAX_CODES,
     CONF_CABINS,
     CONF_COOLDOWN_HOURS,
     CONF_DATE_FROM,
@@ -30,9 +30,9 @@ from .const import (
     DEFAULT_MIN_SEATS,
     DEFAULT_PROGRAMS,
     DEFAULT_REWARD_ONLY,
+    MAX_CODES,
     RESULT_LIMIT,
 )
-
 
 _IATA = re.compile(r"^[A-Z]{3}$")
 
@@ -81,10 +81,18 @@ class WatchConfig:
             destinations=list(data.get(CONF_DESTINATIONS) or []),
             cabins=list(data.get(CONF_CABINS) or []),
             min_seats=int(data.get(CONF_MIN_SEATS) or DEFAULT_MIN_SEATS),
-            max_points=int(data[CONF_MAX_POINTS]) if data.get(CONF_MAX_POINTS) else None,
-            days_ahead=int(data[CONF_DAYS_AHEAD]) if data.get(CONF_DAYS_AHEAD) else None,
-            date_from=dt_util.parse_date(data[CONF_DATE_FROM]) if data.get(CONF_DATE_FROM) else None,
-            date_to=dt_util.parse_date(data[CONF_DATE_TO]) if data.get(CONF_DATE_TO) else None,
+            max_points=int(data[CONF_MAX_POINTS])
+            if data.get(CONF_MAX_POINTS)
+            else None,
+            days_ahead=int(data[CONF_DAYS_AHEAD])
+            if data.get(CONF_DAYS_AHEAD)
+            else None,
+            date_from=dt_util.parse_date(data[CONF_DATE_FROM])
+            if data.get(CONF_DATE_FROM)
+            else None,
+            date_to=dt_util.parse_date(data[CONF_DATE_TO])
+            if data.get(CONF_DATE_TO)
+            else None,
             reward_only=bool(data.get(CONF_REWARD_ONLY, DEFAULT_REWARD_ONLY)),
             interval_hours=int(data.get(CONF_INTERVAL_HOURS) or DEFAULT_INTERVAL_HOURS),
             cooldown_hours=int(

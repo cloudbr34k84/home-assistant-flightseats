@@ -4,6 +4,7 @@ The 200 requests per UTC day allowance belongs to the Gold account and is
 shared with the website and every API key, so the budget trusts the
 X-RateLimit-* headers over its own count and keeps a reserve for manual use.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -109,6 +110,9 @@ class QuotaBudget:
         """Reset the local counter at UTC midnight and when the API reset passed."""
         today = dt_util.utcnow().date().isoformat()
         if self.counted_day != today:
+            if self.reset is None and self.counted_day:
+                self.remaining = None
+                self.as_of = None
             self.counted_day = today
             self.requests_today = 0
         if self.reset is not None and dt_util.utcnow().timestamp() >= self.reset:

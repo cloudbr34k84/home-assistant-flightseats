@@ -1,4 +1,5 @@
 """Actions registered by the integration."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -109,6 +110,11 @@ async def _async_search(hass: HomeAssistant, call: ServiceCall) -> dict[str, Any
 
     date_from: date | None = call.data.get("date_from")
     date_to: date | None = call.data.get("date_to")
+    today = dt_util.utcnow().date()
+    if (date_from and date_to and date_to < date_from) or (date_to and date_to < today):
+        raise _validation_error("invalid_dates")
+    if not call.data["programs"]:
+        raise _validation_error("invalid_programs")
     permutations = count_permutations(
         len(origins),
         len(destinations),

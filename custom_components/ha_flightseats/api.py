@@ -1,7 +1,10 @@
 """Async client for the FlightSeats.io reward-seat search API."""
+
 from __future__ import annotations
 
 import asyncio
+import logging
+import math
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
@@ -10,6 +13,8 @@ import aiohttp
 from homeassistant.util import dt as dt_util
 
 from .const import API_BASE, API_SEARCH_PATH, REQUEST_TIMEOUT
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class FlightSeatsError(Exception):
@@ -56,7 +61,7 @@ class RateLimit:
         def _int(name: str) -> int | None:
             try:
                 return int(headers.get(name))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return None
 
         return cls(
@@ -113,15 +118,32 @@ class Fare:
     def from_dict(cls, data: dict[str, Any]) -> Fare | None:
         """Build a fare, or None when the essential fields are unusable."""
         try:
+            cabin = data["cabin"]
+            seats_raw = float(data.get("seats") or 0)
+            points_raw = float(data["points"])
+            tax = float(data.get("tax") or 0)
+            reward = data.get("isReward", True)
+            if (
+                not isinstance(cabin, str)
+                or not cabin
+                or not isinstance(reward, bool)
+                or not all(
+                    math.isfinite(value) and value >= 0
+                    for value in (seats_raw, points_raw, tax)
+                )
+                or not seats_raw.is_integer()
+                or not points_raw.is_integer()
+            ):
+                return None
             return cls(
-                cabin=str(data["cabin"]),
-                seats=int(data.get("seats") or 0),
-                points=int(data["points"]),
-                tax=float(data.get("tax") or 0),
+                cabin=cabin,
+                seats=int(seats_raw),
+                points=int(points_raw),
+                tax=tax,
                 currency=str(data.get("currency") or ""),
-                is_reward=bool(data.get("isReward", True)),
+                is_reward=reward,
             )
-        except (KeyError, TypeError, ValueError):
+        except KeyError, TypeError, ValueError, OverflowError:
             return None
 
 
@@ -151,6 +173,11 @@ class Flight:
             last_seen = dt_util.parse_datetime(str(data["lastSeen"]))
             if last_seen is not None and last_seen.tzinfo is None:
                 last_seen = last_seen.replace(tzinfo=dt_util.UTC)
+        if any(
+            data.get(key) is not None and not isinstance(data[key], list)
+            for key in ("fares", "segments")
+        ):
+            return None
         duration = data.get("durationMinutes")
         fares = tuple(
             fare
@@ -221,16 +248,6 @@ class SearchResponse:
     rate_limit: RateLimit
 
 
-async def _error_message(response: aiohttp.ClientResponse) -> str:
-    """Return the API's error message, never the request headers."""
-    try:
-        body = await response.json()
-        message = body["error"]["message"]
-    except (aiohttp.ContentTypeError, KeyError, TypeError, ValueError):
-        return f"HTTP {response.status}"
-    return str(message)
-
-
 class FlightSeatsClient:
     """Thin wrapper around the search endpoint."""
 
@@ -256,7 +273,7 @@ class FlightSeatsClient:
                     else:
                         await self._raise_for_status(response, rate_limit)
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-            raise FlightSeatsConnectionError(f"Cannot reach FlightSeats.io: {err}") from err
+            raise FlightSeatsConnectionError("Cannot reach FlightSeats.io") from err
 
         results = body.get("results") if isinstance(body, dict) else None
         if not isinstance(results, list):
@@ -264,6 +281,9 @@ class FlightSeatsClient:
         flights = [
             flight for raw in results if (flight := Flight.from_dict(raw)) is not None
         ]
+        discarded = len(results) - len(flights)
+        if discarded:
+            _LOGGER.debug("Ignored %d malformed flight records", discarded)
         return SearchResponse(
             flights=flights, raw_count=len(results), rate_limit=rate_limit
         )
@@ -273,7 +293,7 @@ class FlightSeatsClient:
         response: aiohttp.ClientResponse, rate_limit: RateLimit
     ) -> None:
         """Map non-200 responses to client exceptions."""
-        message = await _error_message(response)
+        message = f"HTTP {response.status}"
         if response.status == 400:
             raise FlightSeatsBadRequestError(message)
         if response.status == 401:

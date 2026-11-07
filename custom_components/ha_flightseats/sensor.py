@@ -1,4 +1,5 @@
 """Sensors: account quota diagnostics and per-watch values."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -101,7 +102,9 @@ WATCH_SENSORS: tuple[WatchSensorDescription, ...] = (
         translation_key="best_points",
         native_unit_of_measurement=POINTS_UNIT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: data.summary["best"]["points"] if data.summary["best"] else None,
+        value_fn=lambda data: (
+            data.summary["best"]["points"] if data.summary["best"] else None
+        ),
         attrs_fn=_best_points_attrs,
     ),
     WatchSensorDescription(
@@ -109,9 +112,16 @@ WATCH_SENSORS: tuple[WatchSensorDescription, ...] = (
         translation_key="best_taxes",
         device_class=SensorDeviceClass.MONETARY,
         suggested_display_precision=2,
-        value_fn=lambda data: data.summary["best"]["tax"] if data.summary["best"] else None,
+        value_fn=lambda data: (
+            data.summary["best"]["tax"] if data.summary["best"] else None
+        ),
         attrs_fn=lambda data: _pick(
-            data.summary["best"], "currency", "program", "date", "cabin", "flight_numbers"
+            data.summary["best"],
+            "currency",
+            "program",
+            "date",
+            "cabin",
+            "flight_numbers",
         ),
     ),
     WatchSensorDescription(
@@ -296,6 +306,9 @@ async def async_setup_entry(
         if subentry.subentry_type != SUBENTRY_TYPE_WATCH or coordinator is None:
             continue
         async_add_entities(
-            (FlightSeatsWatchSensor(coordinator, description) for description in WATCH_SENSORS),
+            (
+                FlightSeatsWatchSensor(coordinator, description)
+                for description in WATCH_SENSORS
+            ),
             config_subentry_id=subentry.subentry_id,
         )

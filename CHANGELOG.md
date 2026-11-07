@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3 (2026-11-07)
+
+- Add repository issue/PR templates, contribution guide and validated automatic tag releases.
+- Consolidate HACS and Hassfest validation; improve HACS installation and release instructions.
+- Correct minimum Home Assistant version to 2026.8 for existing device APIs.
+- Harden API fare parsing, error privacy, watch input validation and search dates.
+- Fix expired watch cache reuse and quota recovery without reset headers.
+- Redact travel plans in diagnostics and tolerate damaged storage containers.
+- Update tests to Home Assistant 2026.11, add regression coverage and CI linting.
+
 ## 0.1.2
 
 - Watch entity IDs now end with `_flightseats` (for example `sensor.syd_hkg_bus_best_points_flightseats`), so they are easy to find in searches and pickers. Friendly names are unchanged.

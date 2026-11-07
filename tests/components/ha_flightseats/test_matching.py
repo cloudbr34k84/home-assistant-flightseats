@@ -1,4 +1,5 @@
 """Tests for watch matching and parsing."""
+
 from datetime import date
 
 from custom_components.ha_flightseats.api import Flight
@@ -70,7 +71,12 @@ def test_summarise():
     flights = _flights(
         flight(points=200000, date="2027-03-10"),
         flight(points=150000, date="2027-03-20", last_seen=None),
-        flight(points=170000, date="2027-03-12", cabin="BUS", last_seen="2027-02-03T00:00:00Z"),
+        flight(
+            points=170000,
+            date="2027-03-12",
+            cabin="BUS",
+            last_seen="2027-02-03T00:00:00Z",
+        ),
     )
     summary = summarise(extract_matches(flights, _config()))
     assert summary["best"]["points"] == 150000
@@ -101,13 +107,25 @@ def test_window_and_expiry():
 def test_count_permutations():
     today = date(2027, 1, 1)
     assert (
-        count_permutations(2, 3, days_ahead=9, date_from=None, date_to=None, today=today)
+        count_permutations(
+            2, 3, days_ahead=9, date_from=None, date_to=None, today=today
+        )
         == 60
     )
     assert (
         count_permutations(
-            1, 1, days_ahead=None, date_from=date(2027, 1, 1), date_to=date(2027, 1, 31), today=today
+            1,
+            1,
+            days_ahead=None,
+            date_from=date(2027, 1, 1),
+            date_to=date(2027, 1, 31),
+            today=today,
         )
         == 31
     )
-    assert count_permutations(1, 1, days_ahead=None, date_from=None, date_to=None, today=today) == 365
+    assert (
+        count_permutations(
+            1, 1, days_ahead=None, date_from=None, date_to=None, today=today
+        )
+        == 365
+    )

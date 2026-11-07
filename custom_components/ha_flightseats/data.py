@@ -1,4 +1,5 @@
 """Runtime data shared by every platform."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

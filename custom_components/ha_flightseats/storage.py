@@ -1,4 +1,5 @@
 """Persistent state so a restart does not re-poll the quota-limited API."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -25,8 +26,9 @@ class FlightSeatsStore:
         """Load saved state, tolerating a missing or damaged file."""
         saved = await self._store.async_load()
         if isinstance(saved, dict):
-            self.data["quota"] = saved.get("quota") or {}
-            self.data["watches"] = saved.get("watches") or {}
+            for key in ("quota", "watches"):
+                if isinstance(saved.get(key), dict):
+                    self.data[key] = saved[key]
 
     @callback
     def schedule_save(self) -> None:
@@ -43,7 +45,8 @@ class FlightSeatsStore:
 
     def watch(self, subentry_id: str) -> dict[str, Any]:
         """Return the saved state of one watch, or an empty dict."""
-        return self.data["watches"].get(subentry_id) or {}
+        saved = self.data["watches"].get(subentry_id)
+        return saved if isinstance(saved, dict) else {}
 
     @callback
     def set_watch(self, subentry_id: str, state: dict[str, Any]) -> None:

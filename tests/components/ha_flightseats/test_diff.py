@@ -1,4 +1,5 @@
 """Tests for change detection and false-event protection."""
+
 from datetime import datetime, timedelta, timezone
 
 from custom_components.ha_flightseats.api import Flight
@@ -32,7 +33,9 @@ def test_first_poll_is_baseline_only():
 
 
 def test_new_availability_after_baseline():
-    state, _ = diff_matches(empty_state(), _m(flight()), complete=True, cooldown=COOLDOWN, now=T0)
+    state, _ = diff_matches(
+        empty_state(), _m(flight()), complete=True, cooldown=COOLDOWN, now=T0
+    )
     both = _m(flight(), flight(date="2027-03-20", points=120000))
     state, events = diff_matches(state, both, complete=True, cooldown=COOLDOWN, now=T0)
     assert _types(events) == ["new_availability"]
@@ -44,8 +47,15 @@ def test_new_availability_after_baseline():
 
 
 def test_events_are_coalesced_per_poll():
-    state, _ = diff_matches(empty_state(), _m(), complete=True, cooldown=COOLDOWN, now=T0)
-    many = _m(*(flight(date=f"2027-03-{day:02d}", points=100000 + day) for day in range(1, 11)))
+    state, _ = diff_matches(
+        empty_state(), _m(), complete=True, cooldown=COOLDOWN, now=T0
+    )
+    many = _m(
+        *(
+            flight(date=f"2027-03-{day:02d}", points=100000 + day)
+            for day in range(1, 11)
+        )
+    )
     _, events = diff_matches(state, many, complete=True, cooldown=COOLDOWN, now=T0)
     assert _types(events) == ["new_availability"]
     assert events[0]["data"]["count"] == 10
@@ -53,7 +63,9 @@ def test_events_are_coalesced_per_poll():
 
 
 def test_gone_needs_two_complete_polls():
-    state, _ = diff_matches(empty_state(), _m(flight()), complete=True, cooldown=COOLDOWN, now=T0)
+    state, _ = diff_matches(
+        empty_state(), _m(flight()), complete=True, cooldown=COOLDOWN, now=T0
+    )
     state, events = diff_matches(state, [], complete=True, cooldown=COOLDOWN, now=T0)
     assert events == []
     state, events = diff_matches(state, [], complete=True, cooldown=COOLDOWN, now=T0)
@@ -62,51 +74,91 @@ def test_gone_needs_two_complete_polls():
 
 
 def test_reappearing_resets_absence():
-    state, _ = diff_matches(empty_state(), _m(flight()), complete=True, cooldown=COOLDOWN, now=T0)
+    state, _ = diff_matches(
+        empty_state(), _m(flight()), complete=True, cooldown=COOLDOWN, now=T0
+    )
     state, _ = diff_matches(state, [], complete=True, cooldown=COOLDOWN, now=T0)
-    state, events = diff_matches(state, _m(flight()), complete=True, cooldown=COOLDOWN, now=T0)
+    state, events = diff_matches(
+        state, _m(flight()), complete=True, cooldown=COOLDOWN, now=T0
+    )
     assert events == []
     state, events = diff_matches(state, [], complete=True, cooldown=COOLDOWN, now=T0)
     assert events == []  # absence counter restarted
 
 
 def test_truncated_poll_never_reports_gone():
-    state, _ = diff_matches(empty_state(), _m(flight()), complete=True, cooldown=COOLDOWN, now=T0)
+    state, _ = diff_matches(
+        empty_state(), _m(flight()), complete=True, cooldown=COOLDOWN, now=T0
+    )
     for _ in range(5):
-        state, events = diff_matches(state, [], complete=False, cooldown=COOLDOWN, now=T0)
+        state, events = diff_matches(
+            state, [], complete=False, cooldown=COOLDOWN, now=T0
+        )
         assert events == []
     assert len(state["known"]) == 1
 
 
 def test_truncated_poll_still_reports_new():
-    state, _ = diff_matches(empty_state(), _m(), complete=True, cooldown=COOLDOWN, now=T0)
-    _, events = diff_matches(state, _m(flight()), complete=False, cooldown=COOLDOWN, now=T0)
+    state, _ = diff_matches(
+        empty_state(), _m(), complete=True, cooldown=COOLDOWN, now=T0
+    )
+    _, events = diff_matches(
+        state, _m(flight()), complete=False, cooldown=COOLDOWN, now=T0
+    )
     assert _types(events) == ["new_availability"]
 
 
 def test_cooldown_suppresses_flapping():
-    state, _ = diff_matches(empty_state(), _m(), complete=True, cooldown=COOLDOWN, now=T0)
-    state, events = diff_matches(state, _m(flight()), complete=True, cooldown=COOLDOWN, now=T0)
+    state, _ = diff_matches(
+        empty_state(), _m(), complete=True, cooldown=COOLDOWN, now=T0
+    )
+    state, events = diff_matches(
+        state, _m(flight()), complete=True, cooldown=COOLDOWN, now=T0
+    )
     assert _types(events) == ["new_availability"]
     for step in (1, 2):  # gone after two empty polls
-        state, gone = diff_matches(state, [], complete=True, cooldown=COOLDOWN, now=T0 + timedelta(hours=step))
+        state, gone = diff_matches(
+            state, [], complete=True, cooldown=COOLDOWN, now=T0 + timedelta(hours=step)
+        )
     assert _types(gone) == ["availability_gone"]
     state, events = diff_matches(
-        state, _m(flight()), complete=True, cooldown=COOLDOWN, now=T0 + timedelta(hours=3)
+        state,
+        _m(flight()),
+        complete=True,
+        cooldown=COOLDOWN,
+        now=T0 + timedelta(hours=3),
     )
     assert events == []  # back inside the cooldown
-    state2, _ = diff_matches(state, [], complete=True, cooldown=COOLDOWN, now=T0 + timedelta(hours=4))
-    state2, _ = diff_matches(state2, [], complete=True, cooldown=COOLDOWN, now=T0 + timedelta(hours=5))
+    state2, _ = diff_matches(
+        state, [], complete=True, cooldown=COOLDOWN, now=T0 + timedelta(hours=4)
+    )
+    state2, _ = diff_matches(
+        state2, [], complete=True, cooldown=COOLDOWN, now=T0 + timedelta(hours=5)
+    )
     _, events = diff_matches(
-        state2, _m(flight()), complete=True, cooldown=COOLDOWN, now=T0 + timedelta(hours=20)
+        state2,
+        _m(flight()),
+        complete=True,
+        cooldown=COOLDOWN,
+        now=T0 + timedelta(hours=20),
     )
     assert _types(events) == ["new_availability"]  # cooldown over
 
 
 def test_price_drop():
-    state, _ = diff_matches(empty_state(), _m(flight(points=200000)), complete=True, cooldown=COOLDOWN, now=T0)
-    _, events = diff_matches(state, _m(flight(points=180000)), complete=True, cooldown=COOLDOWN, now=T0)
+    state, _ = diff_matches(
+        empty_state(),
+        _m(flight(points=200000)),
+        complete=True,
+        cooldown=COOLDOWN,
+        now=T0,
+    )
+    _, events = diff_matches(
+        state, _m(flight(points=180000)), complete=True, cooldown=COOLDOWN, now=T0
+    )
     assert _types(events) == ["price_drop"]
     assert events[0]["data"]["previous_points"] == 200000
-    _, events = diff_matches(state, _m(flight(points=210000)), complete=True, cooldown=COOLDOWN, now=T0)
+    _, events = diff_matches(
+        state, _m(flight(points=210000)), complete=True, cooldown=COOLDOWN, now=T0
+    )
     assert events == []  # increases are not events

@@ -1,4 +1,5 @@
 """End-to-end tests: setup, quota protection, events and failure handling."""
+
 from unittest.mock import patch
 
 import pytest
@@ -48,7 +49,10 @@ async def test_setup_creates_entities(hass: HomeAssistant, aioclient_mock, mock_
     assert mock_entry.state is ConfigEntryState.LOADED
     assert hass.states.get(SEATS).state == "on"
     assert hass.states.get(BEST_POINTS).state == "150000"
-    assert hass.states.get(BEST_POINTS).attributes["flight_numbers"] == ["EK435", "EK215"]
+    assert hass.states.get(BEST_POINTS).attributes["flight_numbers"] == [
+        "EK435",
+        "EK215",
+    ]
     assert hass.states.get(BEST_POINTS).attributes["seats_available"] == 2
     assert hass.states.get(TAXES).state == "890.5"
     assert hass.states.get(TAXES).attributes["unit_of_measurement"] == "AUD"
@@ -88,7 +92,9 @@ async def test_restart_costs_no_requests(
 
 async def test_new_availability_event(hass: HomeAssistant, aioclient_mock, mock_entry):
     await setup_entry(hass, mock_entry, aioclient_mock, payload(flight()))
-    _respond(aioclient_mock, payload(flight(), flight(date="2027-04-01", points=120000)))
+    _respond(
+        aioclient_mock, payload(flight(), flight(date="2027-04-01", points=120000))
+    )
     await _coordinator(mock_entry).async_manual_refresh()
     await hass.async_block_till_done()
 
@@ -189,7 +195,9 @@ async def test_button_polls_and_respects_floor(
     calls = len(aioclient_mock.mock_calls)
 
     # Below the scheduled reserve but above the manual floor: allowed.
-    await hass.services.async_call("button", "press", {"entity_id": BUTTON}, blocking=True)
+    await hass.services.async_call(
+        "button", "press", {"entity_id": BUTTON}, blocking=True
+    )
     assert len(aioclient_mock.mock_calls) == calls + 1
 
     budget.update(RateLimit(limit=200, remaining=2, reset=4_102_444_800))
@@ -200,9 +208,13 @@ async def test_button_polls_and_respects_floor(
     assert len(aioclient_mock.mock_calls) == calls + 1
 
 
-async def test_auth_failure_starts_reauth(hass: HomeAssistant, aioclient_mock, mock_entry):
+async def test_auth_failure_starts_reauth(
+    hass: HomeAssistant, aioclient_mock, mock_entry
+):
     aioclient_mock.get(
-        SEARCH_URL, status=401, json={"error": {"code": "unauthorized", "message": "bad"}}
+        SEARCH_URL,
+        status=401,
+        json={"error": {"code": "unauthorized", "message": "bad"}},
     )
     mock_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_entry.entry_id)
@@ -227,12 +239,19 @@ async def test_not_gold_creates_repair(hass: HomeAssistant, aioclient_mock, mock
 
 
 async def test_search_action(hass: HomeAssistant, aioclient_mock, mock_entry):
-    await setup_entry(hass, mock_entry, aioclient_mock, payload(flight()), remaining=100)
+    await setup_entry(
+        hass, mock_entry, aioclient_mock, payload(flight()), remaining=100
+    )
     _respond(aioclient_mock, payload(flight(), flight(date="2027-03-16")), remaining=99)
     result = await hass.services.async_call(
         DOMAIN,
         "search",
-        {"origins": "syd", "destinations": ["LAX"], "cabins": ["BUS"], "date_from": "2027-03-01"},
+        {
+            "origins": "syd",
+            "destinations": ["LAX"],
+            "cabins": ["BUS"],
+            "date_from": "2027-03-01",
+        },
         blocking=True,
         return_response=True,
     )
@@ -259,8 +278,10 @@ async def test_search_action(hass: HomeAssistant, aioclient_mock, mock_entry):
         )
 
 
-async def test_diagnostics_redact_key(hass: HomeAssistant, aioclient_mock, mock_entry, hass_client):
-    from pytest_homeassistant_custom_component.components.diagnostics import (
+async def test_diagnostics_redact_key(
+    hass: HomeAssistant, aioclient_mock, mock_entry, hass_client
+):
+    from pytest_homeassistant.components.diagnostics import (
         get_diagnostics_for_config_entry,
     )
 
