@@ -10,3 +10,4 @@ htmlcov/
 .env.*
 test-results/
 release-notes.md
+.mypy_cache/

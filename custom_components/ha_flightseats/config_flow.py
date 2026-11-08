@@ -5,11 +5,9 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
 from homeassistant.config_entries import (
-    ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
     ConfigSubentryFlow,
@@ -43,7 +41,6 @@ from .api import (
     FlightSeatsError,
     FlightSeatsForbiddenError,
     FlightSeatsRateLimitError,
-    SearchParams,
 )
 from .const import (
     CABINS,
@@ -77,7 +74,15 @@ from .const import (
     SCHEDULED_RESERVE,
     SUBENTRY_TYPE_WATCH,
 )
+from .data import FlightSeatsConfigEntry
 from .matching import count_permutations, parse_codes, valid_codes
+
+# HA 2026.10+ types use probatio; older supported versions expose voluptuous.
+# HA provides the runtime compatibility layer, so keep the legacy import there.
+if TYPE_CHECKING:
+    import probatio as vol
+else:
+    import voluptuous as vol
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,7 +103,7 @@ SECTION_SCHEDULE = "schedule"
 SECTION_FIELDS = {
     SECTION_FILTERS: (CONF_CABINS, CONF_MIN_SEATS, CONF_MAX_POINTS, CONF_REWARD_ONLY),
     SECTION_DATES: (CONF_DAYS_AHEAD, CONF_DATE_FROM, CONF_DATE_TO),
-    SECTION_SCHEDULE: (CONF_INTERVAL_HOURS, CONF_COOLDOWN_HOURS),
+    SECTION_SCHEDULE: (CONF_COOLDOWN_HOURS,),
 }
 _SECTIONED = {field for fields in SECTION_FIELDS.values() for field in fields}
 
@@ -116,17 +121,8 @@ def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
 async def _async_validate_key(hass: HomeAssistant, api_key: str) -> str | None:
     """Return an error key, or None when the key works. Costs one request."""
     client = FlightSeatsClient(async_get_clientsession(hass), api_key)
-    today = dt_util.utcnow().date()
-    params = SearchParams(
-        programs=["QF"],
-        origins=["SYD"],
-        destinations=["MEL"],
-        date_from=today,
-        date_to=today,
-        limit=1,
-    )
     try:
-        await client.async_search(params)
+        await client.async_check_connection()
     except FlightSeatsAuthError:
         return "invalid_auth"
     except FlightSeatsForbiddenError:
@@ -158,7 +154,7 @@ class FlightSeatsConfigFlow(ConfigFlow, domain=DOMAIN):
     @classmethod
     @callback
     def async_get_supported_subentry_types(
-        cls, config_entry: ConfigEntry
+        cls, config_entry: FlightSeatsConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
         """Watches are added from the integration page as subentries."""
         return {SUBENTRY_TYPE_WATCH: WatchSubentryFlow}
@@ -198,7 +194,7 @@ class FlightSeatsConfigFlow(ConfigFlow, domain=DOMAIN):
             if error := await _async_validate_key(self.hass, user_input[CONF_API_KEY]):
                 errors["base"] = error
             else:
-                return self.async_update_and_abort(
+                return self.async_update_reload_and_abort(
                     self._get_reauth_entry(),
                     data_updates={CONF_API_KEY: user_input[CONF_API_KEY]},
                 )
@@ -215,7 +211,7 @@ class FlightSeatsConfigFlow(ConfigFlow, domain=DOMAIN):
             if error := await _async_validate_key(self.hass, user_input[CONF_API_KEY]):
                 errors["base"] = error
             else:
-                return self.async_update_and_abort(
+                return self.async_update_reload_and_abort(
                     self._get_reconfigure_entry(),
                     data_updates={CONF_API_KEY: user_input[CONF_API_KEY]},
                 )
@@ -285,7 +281,7 @@ class WatchSubentryFlow(ConfigSubentryFlow):
     async def _async_step_watch(
         self, step_id: str, user_input: dict[str, Any] | None
     ) -> SubentryFlowResult:
-        entry = self._get_entry()
+        entry: FlightSeatsConfigEntry = self._get_entry()
         subentry = (
             self._get_reconfigure_subentry() if step_id == "reconfigure" else None
         )
@@ -296,6 +292,10 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             user_input = _flatten(user_input)
+            # Preserve existing watches' schedules; new watches use our default.
+            user_input[CONF_INTERVAL_HOURS] = defaults.get(
+                CONF_INTERVAL_HOURS, DEFAULT_INTERVAL_HOURS
+            )
             data, errors = self._validate(
                 entry, user_input, ignore=subentry.subentry_id if subentry else None
             )
@@ -324,7 +324,9 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         )
 
     @staticmethod
-    def _budget_numbers(entry: ConfigEntry, ignore: str | None) -> tuple[float, int]:
+    def _budget_numbers(
+        entry: FlightSeatsConfigEntry, ignore: str | None
+    ) -> tuple[float, int]:
         """Return (requests per day used by other watches, requests per day allowed)."""
         used = 0.0
         for subentry_id, subentry in entry.subentries.items():
@@ -339,14 +341,17 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         return used, limit - SCHEDULED_RESERVE
 
     def _validate(
-        self, entry: ConfigEntry, user_input: dict[str, Any], ignore: str | None
+        self,
+        entry: FlightSeatsConfigEntry,
+        user_input: dict[str, Any],
+        ignore: str | None,
     ) -> tuple[dict[str, Any], dict[str, str]]:
         """Normalise the form and return (stored data, errors)."""
         errors: dict[str, str] = {}
 
         def _error(field: str, code: str) -> None:
             # Errors on fields inside a (possibly collapsed) section show at the top instead.
-            if field in _SECTIONED:
+            if field in _SECTIONED or field == CONF_INTERVAL_HOURS:
                 errors.setdefault("base", code)
             else:
                 errors[field] = code
@@ -486,10 +491,6 @@ class WatchSubentryFlow(ConfigSubentryFlow):
         )
         schedule = vol.Schema(
             {
-                vol.Required(
-                    CONF_INTERVAL_HOURS,
-                    default=defaults.get(CONF_INTERVAL_HOURS) or DEFAULT_INTERVAL_HOURS,
-                ): _number(MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS),
                 vol.Required(
                     CONF_COOLDOWN_HOURS,
                     default=defaults.get(CONF_COOLDOWN_HOURS, DEFAULT_COOLDOWN_HOURS),

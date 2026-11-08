@@ -19,10 +19,14 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .budget import QuotaBudget
-from .const import MAX_RESULTS_ATTRIBUTE, SCHEDULED_RESERVE, SUBENTRY_TYPE_WATCH
+from .const import MAX_RESULTS_ATTRIBUTE, SCHEDULED_RESERVE
 from .coordinator import FlightSeatsWatchCoordinator, WatchData
 from .data import FlightSeatsConfigEntry
-from .entity import FlightSeatsWatchEntity, account_device_info
+from .entity import (
+    FlightSeatsWatchEntity,
+    account_device_info,
+    async_setup_watch_entities,
+)
 
 PARALLEL_UPDATES = 0
 
@@ -133,6 +137,7 @@ WATCH_SENSORS: tuple[WatchSensorDescription, ...] = (
     ),
     WatchSensorDescription(
         key="data_freshness",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="data_freshness",
         device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda data: data.summary["newest_last_seen"],
@@ -301,14 +306,12 @@ async def async_setup_entry(
     async_add_entities(
         FlightSeatsAccountSensor(entry, description) for description in ACCOUNT_SENSORS
     )
-    for subentry in entry.subentries.values():
-        coordinator = entry.runtime_data.coordinators.get(subentry.subentry_id)
-        if subentry.subentry_type != SUBENTRY_TYPE_WATCH or coordinator is None:
-            continue
-        async_add_entities(
-            (
-                FlightSeatsWatchSensor(coordinator, description)
-                for description in WATCH_SENSORS
-            ),
-            config_subentry_id=subentry.subentry_id,
-        )
+    async_setup_watch_entities(
+        hass,
+        entry,
+        async_add_entities,
+        lambda coordinator: [
+            FlightSeatsWatchSensor(coordinator, description)
+            for description in WATCH_SENSORS
+        ],
+    )

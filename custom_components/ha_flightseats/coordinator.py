@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -26,12 +25,11 @@ from .api import (
 from .budget import QuotaBudget, QuotaLowError
 from .const import (
     DOMAIN,
-    ISSUE_NOT_GOLD,
     RESULT_LIMIT,
-    TRANSIENT_FAILURES_BEFORE_UNAVAILABLE,
 )
 from .diff import diff_matches, empty_state
 from .matching import WatchConfig, extract_matches, summarise
+from .repairs import async_clear_not_gold_issue, async_create_not_gold_issue
 from .storage import FlightSeatsStore
 
 if TYPE_CHECKING:
@@ -89,9 +87,8 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
         self._diff_state: dict[str, Any] = (
             store.watch(self.subentry_id).get("diff") or empty_state()
         )
-        self._normal_interval = self.update_interval
+        self._normal_interval = timedelta(hours=self.config.interval_hours)
         self._poll_id = 0
-        self._failures = 0
         self._manual = False
         self._catch_up_unsub: CALLBACK_TYPE | None = None
 
@@ -103,6 +100,10 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
         self._manual = True
         try:
             await self.async_refresh()
+            if not self.last_update_success:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN, translation_key="refresh_failed"
+                ) from self.last_exception
         finally:
             self._manual = False
 
@@ -114,24 +115,25 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
     # -- update ----------------------------------------------------------
 
     async def _async_update_data(self) -> WatchData:
-        """Return fresh data, saved data, or the last data when the quota is low."""
+        """Return fresh or restored data; report failures without replacing the last result."""
         today = dt_util.utcnow().date()
         if self.config.is_expired(today):
             return WatchData([], summarise([]), None, 0, True, expired=True)
 
-        fallback = self.data
-        if fallback is None:
+        if self.data is None:
             restored = self._restore()
             if restored is not None and self._is_fresh(restored):
                 return restored
-            fallback = restored
 
         try:
             await self._budget.acquire(manual=self._manual)
         except QuotaLowError as err:
-            _LOGGER.info("Skipping poll of %s: %s", self.watch_name, err)
             self._schedule_catch_up()
-            return fallback or WatchData([], summarise([]), None, 0, True)
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="quota_low",
+                translation_placeholders={"remaining": str(err.remaining)},
+            ) from err
 
         try:
             response = await self._client.async_search(self.config.search_params(today))
@@ -140,21 +142,23 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
                 translation_domain=DOMAIN, translation_key="auth_failed"
             ) from err
         except FlightSeatsForbiddenError as err:
-            self._create_not_gold_issue()
+            async_create_not_gold_issue(self.hass, self.config_entry)
             raise UpdateFailed(
                 translation_domain=DOMAIN, translation_key="not_gold"
             ) from err
         except FlightSeatsBadRequestError as err:
-            raise UpdateFailed(f"FlightSeats.io rejected the search: {err}") from err
+            raise UpdateFailed(
+                translation_domain=DOMAIN, translation_key="search_rejected"
+            ) from err
         except FlightSeatsRateLimitError as err:
             self._budget.rate_limited(err.rate_limit)
-            return self._transient(fallback, err)
+            self._raise_transient(err)
         except FlightSeatsError as err:
-            return self._transient(fallback, err)
+            self._raise_transient(err)
 
-        self._failures = 0
         self.update_interval = self._normal_interval
-        ir.async_delete_issue(self.hass, DOMAIN, ISSUE_NOT_GOLD)
+        self._cancel_catch_up()
+        async_clear_not_gold_issue(self.hass, self.config_entry)
         self._budget.update(response.rate_limit)
 
         matches = extract_matches(response.flights, self.config)
@@ -180,19 +184,12 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
 
     # -- internals ---------------------------------------------------------
 
-    def _transient(self, fallback: WatchData | None, err: Exception) -> WatchData:
-        """Keep the last data through brief outages; fail after repeated ones."""
-        self._failures += 1
+    def _raise_transient(self, err: Exception) -> NoReturn:
+        """Retry sooner and let the coordinator report outage/recovery once."""
         self.update_interval = min(_RETRY_INTERVAL, self._normal_interval)
-        if (
-            fallback is not None
-            and self._failures < TRANSIENT_FAILURES_BEFORE_UNAVAILABLE
-        ):
-            _LOGGER.warning(
-                "Poll of %s failed (%s); keeping the last data", self.watch_name, err
-            )
-            return fallback
-        raise UpdateFailed(f"Cannot update {self.watch_name}: {err}") from err
+        raise UpdateFailed(
+            translation_domain=DOMAIN, translation_key="cannot_connect"
+        ) from err
 
     def _is_fresh(self, data: WatchData) -> bool:
         if data.fetched_at is None or self.update_interval is None:
@@ -226,17 +223,6 @@ class FlightSeatsWatchCoordinator(DataUpdateCoordinator[WatchData]):
                 "complete": data.complete,
                 "diff": self._diff_state,
             },
-        )
-
-    def _create_not_gold_issue(self) -> None:
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            ISSUE_NOT_GOLD,
-            is_fixable=False,
-            severity=ir.IssueSeverity.ERROR,
-            translation_key=ISSUE_NOT_GOLD,
-            learn_more_url="https://flightseats.io/pricing",
         )
 
     @callback

@@ -104,6 +104,11 @@ class QuotaBudget:
         for update in list(self._listeners):
             update()
 
+    @callback
+    def async_notify_listeners(self) -> None:
+        """Notify entities after watch scheduling metadata changes."""
+        self._changed()
+
     # -- state ---------------------------------------------------------
 
     def _roll_day(self) -> None:

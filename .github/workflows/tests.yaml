@@ -43,17 +43,24 @@ jobs:
 
       - name: Lint and formatting
         run: |
-          ruff check custom_components tests
-          ruff format --check custom_components tests
+          ruff check custom_components tests .github/scripts/check_coverage.py
+          ruff format --check custom_components tests .github/scripts/check_coverage.py
+
+      - name: Strict typing
+        run: python -m mypy
 
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short --junitxml=test-results/pytest.xml
+        run: |
+          python -m coverage run --branch -m pytest tests/ -v --tb=short --junitxml=test-results/pytest.xml
+          python -m coverage report --show-missing
+          python -m coverage json -o test-results/coverage.json
+          python .github/scripts/check_coverage.py test-results/coverage.json
 
       - name: Upload test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: pytest-results
-          path: test-results/pytest.xml
+          path: test-results/
           if-no-files-found: ignore
           retention-days: 14

@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.0 (2026-11-09)
+
+### Changes
+
+- Add watches without reloading the account or interrupting existing watches. Deleting a watch removes its devices, entities and saved results and stops its polling.
+- Report failed checks immediately as unavailable watch data. Check now and ad-hoc search report actionable errors, and connection failures retry after 30 minutes.
+- Validate API access during startup, preserve quota counters after failed setup, and clean up polling, listeners and in-flight watch additions on unload.
+- Explicitly reload after key replacement or reauthentication while preserving watch/device/entity identities. Rejected ad-hoc search credentials also start reauthentication.
+- Translate public errors, scope Gold-plan repairs to the account, clear repairs after confirmed recovery/removal, and allow orphan device cleanup.
+- Classify watch freshness as diagnostic and improve diagnostics privacy and behavior during watch deletion.
+- Complete the Bronze-through-Platinum development checklist for custom distribution, with evidence and justified exemptions. Bundled branding meets current custom-integration guidance; this is not an official Home Assistant tier award.
+- Expand setup, action, removal, data-update, troubleshooting and limitations documentation, including notification examples.
+- Enforce strict typing and per-module coverage in CI; include the typed-package marker.
+
+### Upgrade notes
+
+- Requires Home Assistant **2026.8.0 or newer**. Upgrading from v0.1.3 preserves watches, entity IDs and saved polling intervals. Upgrades from releases before v0.1.2 still apply the previously documented `_flightseats` entity-ID suffix migration.
+- New watches use a six-hour polling interval; the watch form no longer offers an interval field. Use Home Assistant polling controls and Check now for a custom schedule, subject to quota limits.
+- A failed or quota-blocked due check now makes watch data unavailable immediately, replacing the previous grace period. Check now remains available for recovery.
+- Reconfigure an expired fixed-date watch to resume polling. No new API key is needed unless the current key is rejected.
+- Availability history/archive features remain planned and are not included in this release.
+
+### Validation
+
+- **154 mocked tests pass** against Home Assistant 2026.11.0 on Python 3.14.
+- Strict mypy passes for all **19 production modules**. Every module exceeds **95% combined line/branch coverage**; config flow and diagnostics have **100%** coverage.
+- Ruff lint/format and release metadata checks pass. No live FlightSeats API requests are needed for these checks.
+
 ## 0.1.3 (2026-11-07)
 
 - Add repository issue/PR templates, contribution guide and validated automatic tag releases.

@@ -87,3 +87,17 @@ async def test_connection_failure_and_bad_body(hass, aioclient_mock):
     aioclient_mock.get(SEARCH_URL, json={"nope": 1})
     with pytest.raises(FlightSeatsConnectionError):
         await _client(hass).async_search(PARAMS)
+
+
+async def test_shared_session_survives_entry_unload(hass, aioclient_mock, mock_entry):
+    """The integration borrows HA's shared session instead of closing its connection pool."""
+    from .conftest import setup_entry
+
+    session = async_get_clientsession(hass)
+    await setup_entry(hass, mock_entry, aioclient_mock, payload())
+    assert mock_entry.runtime_data.client._session is session
+    assert await hass.config_entries.async_unload(mock_entry.entry_id)
+    assert not session.closed
+    # The same injected pool still works for a client after the entry unloads.
+    response = await FlightSeatsClient(session, "fs_live_test").async_search(PARAMS)
+    assert response.flights == []

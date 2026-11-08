@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING
+
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, SIGNAL_WATCHES_UPDATED
 from .coordinator import FlightSeatsWatchCoordinator
+
+if TYPE_CHECKING:
+    from .data import FlightSeatsConfigEntry
 
 MANUFACTURER = "FlightSeats.io"
 # Appended to every watch entity's ID so they are easy to find: sensor.syd_lax_bus_best_points_flightseats
@@ -48,3 +57,31 @@ class FlightSeatsWatchEntity(CoordinatorEntity[FlightSeatsWatchCoordinator]):
             entry_type=DeviceEntryType.SERVICE,
             via_device_id=coordinator.config_entry.runtime_data.account_device_id,
         )
+
+
+@callback
+def async_setup_watch_entities(
+    hass: HomeAssistant,
+    entry: FlightSeatsConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+    factory: Callable[[FlightSeatsWatchCoordinator], Iterable[FlightSeatsWatchEntity]],
+) -> None:
+    """Add each watch once per platform, including watches created after setup."""
+    known: set[str] = set()
+
+    @callback
+    def _add_watches() -> None:
+        coordinators = entry.runtime_data.coordinators
+        known.intersection_update(coordinators)
+        for subentry_id in coordinators.keys() - known:
+            known.add(subentry_id)
+            async_add_entities(
+                factory(coordinators[subentry_id]), config_subentry_id=subentry_id
+            )
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{SIGNAL_WATCHES_UPDATED}_{entry.entry_id}", _add_watches
+        )
+    )
+    _add_watches()

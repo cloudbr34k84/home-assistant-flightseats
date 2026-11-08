@@ -55,7 +55,6 @@ RESULT_LIMIT = 500
 # A match must be missing from this many consecutive complete polls before an
 # availability_gone event is raised.
 ABSENT_POLLS_BEFORE_GONE = 2
-TRANSIENT_FAILURES_BEFORE_UNAVAILABLE = 3
 
 STORAGE_VERSION = 1
 MAX_RESULTS_ATTRIBUTE = 10
@@ -67,3 +66,5 @@ EVENT_PRICE_DROP = "price_drop"
 EVENT_TYPES = [EVENT_NEW_AVAILABILITY, EVENT_AVAILABILITY_GONE, EVENT_PRICE_DROP]
 
 ISSUE_NOT_GOLD = "not_gold"
+
+SIGNAL_WATCHES_UPDATED = f"{DOMAIN}_watches_updated"

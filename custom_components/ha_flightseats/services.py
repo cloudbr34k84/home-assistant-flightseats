@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
@@ -29,6 +28,14 @@ from .const import (
     PROGRAMS,
 )
 from .matching import count_permutations, parse_codes, valid_codes
+from .repairs import async_clear_not_gold_issue, async_create_not_gold_issue
+
+# HA 2026.10+ types use probatio; older supported versions expose voluptuous.
+# HA provides the runtime compatibility layer, so keep the legacy import there.
+if TYPE_CHECKING:
+    import probatio as vol
+else:
+    import voluptuous as vol
 
 SERVICE_SEARCH = "search"
 _MAX_SERVICE_LIMIT = 200
@@ -149,18 +156,25 @@ async def _async_search(hass: HomeAssistant, call: ServiceCall) -> dict[str, Any
             translation_domain=DOMAIN, translation_key="rate_limited"
         ) from err
     except FlightSeatsAuthError as err:
+        entries[0].async_start_reauth(hass)
         raise HomeAssistantError(
             translation_domain=DOMAIN, translation_key="auth_failed"
         ) from err
     except FlightSeatsForbiddenError as err:
+        async_create_not_gold_issue(hass, entries[0])
         raise HomeAssistantError(
             translation_domain=DOMAIN, translation_key="not_gold"
         ) from err
     except FlightSeatsBadRequestError as err:
-        raise HomeAssistantError(f"FlightSeats.io rejected the search: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN, translation_key="search_rejected"
+        ) from err
     except FlightSeatsError as err:
-        raise HomeAssistantError(f"FlightSeats.io search failed: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN, translation_key="cannot_connect"
+        ) from err
 
+    async_clear_not_gold_issue(hass, entries[0])
     runtime.budget.update(response.rate_limit)
     return {
         "count": len(response.flights),

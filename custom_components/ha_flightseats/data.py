@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
@@ -23,7 +24,9 @@ class FlightSeatsData:
     budget: QuotaBudget
     store: FlightSeatsStore
     coordinators: dict[str, FlightSeatsWatchCoordinator]
+    api_key: str
     account_device_id: str
+    watch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 type FlightSeatsConfigEntry = ConfigEntry[FlightSeatsData]

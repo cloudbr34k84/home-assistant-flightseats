@@ -1,0 +1,142 @@
+# Progress against the supplied HA quality scale; no official tier claimed.
+rules:
+  # Bronze
+  action-setup:
+    status: done
+    comment: async_setup registers search; the action checks for a loaded account.
+  appropriate-polling:
+    status: done
+    comment: Six-hour default; no polling field. Legacy watches keep their existing schedule.
+  brands:
+    status: done
+    comment: Custom integration targeting HA 2026.8+ ships PNG icon/logo variants in brand/. HA 2026.3+ supports local brands; upstream submission applies only if pursuing Core inclusion.
+  common-modules: done
+  config-flow:
+    status: done
+    comment: API key in entry.data; saved-search criteria in subentry.data. Names label user-created watches.
+  config-flow-test-coverage:
+    status: done
+    comment: All credential and watch flows, including error recovery, are tested; CI requires 100% flow coverage.
+  dependency-transparency: done
+  docs-actions: done
+  docs-conditions:
+    status: exempt
+    comment: No custom automation triggers or conditions; README explains standard entity triggers and conditions.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  docs-triggers:
+    status: exempt
+    comment: No custom automation triggers or conditions; README explains standard entity triggers and conditions.
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup:
+    status: done
+    comment: First coordinator refresh raises setup/auth errors. Fresh persisted data avoids redundant requests; accounts without watches run a minimal probe.
+  unique-config-entry: done
+  # Silver
+  action-exceptions:
+    status: done
+    comment: Search and Check now raise validation/action errors; rejected search credentials start reauth.
+  config-entry-unloading:
+    status: done
+    comment: Entry callbacks flush storage and stop coordinators/timers; entity lifecycle removes budget listeners.
+  docs-configuration-parameters:
+    status: exempt
+    comment: No options flow. README documents watch subentry editing and account key replacement.
+  docs-installation-parameters:
+    status: done
+    comment: README lists every account/watch field with labels, values, defaults and credential source.
+  entity-unavailable:
+    status: done
+    comment: Coordinator data entities are unavailable on failed/blocked due checks; Check now remains usable for recovery and quota diagnostics describe local budget state.
+  integration-owner: done
+  log-when-unavailable:
+    status: done
+    comment: Coordinator logs the initial failed update and recovery; repeated failures do not add custom warnings.
+  parallel-updates:
+    status: done
+    comment: Read-only platforms use 0; button uses 1. All requests share the account quota lock and spacing.
+  reauthentication-flow:
+    status: done
+    comment: New keys are validated then explicitly reload the entry, preserving watch/device/entity identities. API has no stable account identifier to compare.
+  test-coverage:
+    status: done
+    comment: CI requires more than 95% line/branch coverage in every module and 100% in config_flow.py.
+  # Gold
+  devices:
+    status: done
+    comment: Account and watch service devices have stable identifiers, manufacturer/model and parent links; no invented hardware metadata.
+  diagnostics:
+    status: done
+    comment: Redacts keys, route/date criteria and titles; tolerates pending watch removal; no API calls. CI requires 100% diagnostics coverage.
+  discovery:
+    status: exempt
+    comment: FlightSeats.io is a fixed cloud API authenticated with a user-provided key; there is no discoverable network device or service announcement.
+  discovery-update-info:
+    status: exempt
+    comment: No device discovery or changing local network address; the cloud endpoint is fixed.
+  docs-data-update:
+    status: done
+    comment: README explains six-hour polling, cached upstream timestamps, startup cache reuse, retry/catchup and shared limits.
+  docs-examples:
+    status: done
+    comment: README includes ad-hoc search, new-availability and points-threshold examples using real entity-ID conventions.
+  docs-known-limitations:
+    status: done
+    comment: README lists cached data, no bookings/pagination, result/event limits, currencies/timezones and event-state limitations.
+  docs-supported-devices:
+    status: exempt
+    comment: No physical devices are integrated. README instead documents the supported cloud service and QF/VA programs.
+  docs-supported-functions:
+    status: done
+    comment: README entity tables cover all four platforms, account/watch grouping, disabled entities and the search action.
+  docs-troubleshooting:
+    status: done
+    comment: README covers credentials, plan access, quota, connectivity, expired windows, result caps, disabled entities and diagnostics.
+  docs-use-cases:
+    status: done
+    comment: README describes family-seat watches, points targets and managing shared quota.
+  dynamic-devices:
+    status: done
+    comment: Reconciles new/deleted watches in place; platforms subscribe for additions; existing searches keep running. Edits reload for new criteria.
+  entity-category:
+    status: done
+    comment: Account budget sensors and watch data freshness are diagnostic; availability, fares, counts, events and Check now are primary functionality.
+  entity-device-class:
+    status: done
+    comment: Taxes use monetary, freshness/reset use timestamp, earliest departure uses date. No fitting class exists for reward points or seat availability.
+  entity-disabled-by-default:
+    status: done
+    comment: Earliest date and daily request limit are disabled initially; existing user choices remain intact.
+  entity-translations:
+    status: done
+    comment: All entity labels use strings.json translation keys and has_entity_name; user-defined watch names are retained.
+  exception-translations:
+    status: done
+    comment: All public HomeAssistantError subclasses, including setup and coordinator failures, use translated keys.
+  icon-translations:
+    status: done
+    comment: All custom entity/action icons are declared in icons.json, with no Python icon attributes.
+  reconfiguration-flow:
+    status: done
+    comment: Account key and watch criteria can be reconfigured, with validation/error recovery and stable entity identities.
+  repair-issues:
+    status: done
+    comment: Plan-access failures from startup, polls and search create an account-scoped repair. Success/removal clears it; unload preserves it. Older supported HA versions use explicit removal cleanup.
+  stale-devices:
+    status: done
+    comment: Deleting a watch removes its subentry devices/entities and cache and stops polling. The removal hook permits orphan device deletion while protecting active configurations.
+  # Platinum
+  async-dependency:
+    status: done
+    comment: Bundled API client uses aiohttp and asyncio timeouts; storage uses HA async Store. There is no blocking network dependency.
+  inject-websession:
+    status: done
+    comment: Setup and credential validation inject HA's shared aiohttp session. Unload does not close it; lifecycle regression test verifies reuse.
+  strict-typing:
+    status: done
+    comment: Custom-repository strict mypy checks all 19 source modules in CI with no integration suppressions. Typed runtime entries, client and py.typed are included; Core .strict-typing registration applies only to future Core submission.

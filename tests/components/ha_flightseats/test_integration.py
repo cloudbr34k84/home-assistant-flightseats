@@ -147,27 +147,39 @@ async def test_truncated_result_never_reports_gone(
     assert hass.states.get(MATCHING).attributes["api_limit_reached"] is True
 
 
-async def test_transient_failures_keep_data_then_go_unavailable(
-    hass: HomeAssistant, aioclient_mock, mock_entry
+async def test_failed_poll_unavailable_and_recovery_logged_once(
+    hass: HomeAssistant, aioclient_mock, mock_entry, caplog
 ):
+    """One outage/recovery message; stale values never look current."""
     await setup_entry(hass, mock_entry, aioclient_mock, payload(flight()))
     coordinator = _coordinator(mock_entry)
+    caplog.clear()
     _respond(aioclient_mock, status=500)
-
-    for _ in range(2):
-        await coordinator.async_manual_refresh()
+    for _ in range(3):
+        await coordinator.async_refresh()
         await hass.async_block_till_done()
-        assert hass.states.get(BEST_POINTS).state == "190000"  # last data kept
-        assert hass.states.get(EVENT).attributes["event_type"] is None
-
-    await coordinator.async_manual_refresh()
-    await hass.async_block_till_done()
-    assert hass.states.get(BEST_POINTS).state == STATE_UNAVAILABLE
-
+        assert hass.states.get(BEST_POINTS).state == STATE_UNAVAILABLE
+        assert hass.states.get(SEATS).state == STATE_UNAVAILABLE
+        assert hass.states.get(EVENT).state == STATE_UNAVAILABLE
+        assert coordinator.data.matches  # retained for comparison on recovery
+    errors = [r for r in caplog.records if "Error fetching" in r.message]
+    assert len(errors) == 1
+    assert not any("keeping the last data" in r.message for r in caplog.records)
     _respond(aioclient_mock, payload(flight()))
-    await coordinator.async_manual_refresh()
+    await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(BEST_POINTS).state == "190000"
+    assert (
+        len(
+            [
+                r
+                for r in caplog.records
+                if "Fetching" in r.message and "recovered" in r.message
+            ]
+        )
+        == 1
+    )
+    assert coordinator.update_interval.total_seconds() == 6 * 3600
 
 
 async def test_scheduled_poll_skipped_when_quota_low(
@@ -182,7 +194,7 @@ async def test_scheduled_poll_skipped_when_quota_low(
     await hass.async_block_till_done()
 
     assert len(aioclient_mock.mock_calls) == calls  # no request made
-    assert hass.states.get(BEST_POINTS).state == "190000"  # data kept, not unavailable
+    assert hass.states.get(BEST_POINTS).state == STATE_UNAVAILABLE
     assert hass.states.get(REMAINING).state == "8"
 
 
@@ -230,12 +242,24 @@ async def test_not_gold_creates_repair(hass: HomeAssistant, aioclient_mock, mock
     mock_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_entry.entry_id)
     await hass.async_block_till_done()
-    assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_NOT_GOLD) is not None
-    assert hass.states.get(BEST_POINTS).state == STATE_UNAVAILABLE
+    assert (
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, f"{ISSUE_NOT_GOLD}_{mock_entry.entry_id}"
+        )
+        is not None
+    )
+    assert mock_entry.state is ConfigEntryState.SETUP_RETRY
+    assert hass.states.get(BEST_POINTS) is None
 
     _respond(aioclient_mock, payload(flight()))
-    await _coordinator(mock_entry).async_manual_refresh()
-    assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE_NOT_GOLD) is None
+    assert await hass.config_entries.async_reload(mock_entry.entry_id)
+    await hass.async_block_till_done()
+    assert (
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, f"{ISSUE_NOT_GOLD}_{mock_entry.entry_id}"
+        )
+        is None
+    )
 
 
 async def test_search_action(hass: HomeAssistant, aioclient_mock, mock_entry):
@@ -292,3 +316,94 @@ async def test_diagnostics_redact_key(
     watch = next(iter(diagnostics["watches"].values()))
     assert watch["matches"] == 1
     assert diagnostics["budget"]["effective_remaining"] == 150
+
+
+@pytest.mark.parametrize("with_watch", [False, True])
+@pytest.mark.parametrize(
+    "status,state",
+    [
+        (401, ConfigEntryState.SETUP_ERROR),
+        (500, ConfigEntryState.SETUP_RETRY),
+        (429, ConfigEntryState.SETUP_RETRY),
+    ],
+)
+async def test_initial_connection_failure(
+    hass, aioclient_mock, mock_entry, with_watch, status, state
+):
+    """Startup reports credentials or retries a temporary failure before loading platforms."""
+    if not with_watch:
+        from pytest_homeassistant.common import MockConfigEntry
+
+        from .conftest import API_KEY
+
+        mock_entry = MockConfigEntry(
+            domain=DOMAIN, unique_id=DOMAIN, data={"api_key": API_KEY}
+        )
+    aioclient_mock.get(SEARCH_URL, status=status, json={}, headers=rate_headers())
+    mock_entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(mock_entry.entry_id)
+    await hass.async_block_till_done()
+    assert mock_entry.state is state
+    assert hass.states.get(SEATS) is None
+    assert hass.services.has_service(DOMAIN, "search")
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "search",
+            {"origins": "SYD", "destinations": "MEL"},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_account_without_watches(hass, aioclient_mock):
+    """An account is validated even before the first watch is added."""
+    from pytest_homeassistant.common import MockConfigEntry
+
+    from .conftest import API_KEY
+
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, data={"api_key": API_KEY})
+    await setup_entry(hass, entry, aioclient_mock, payload(), remaining=140)
+    assert entry.state is ConfigEntryState.LOADED
+    assert len(aioclient_mock.mock_calls) == 1
+    assert hass.states.get(REMAINING).state == "140"
+
+
+async def test_action_exists_without_account(hass):
+    """Register actions before any entry exists, with a useful validation error."""
+    from homeassistant.setup import async_setup_component
+
+    assert await async_setup_component(hass, DOMAIN, {})
+    assert hass.services.has_service(DOMAIN, "search")
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "search",
+            {"origins": "SYD", "destinations": "MEL"},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_account_setup_preserves_quota_reserve(hass, aioclient_mock):
+    """An empty account cannot spend the saved reserve just to validate startup."""
+    from homeassistant.exceptions import ConfigEntryNotReady
+    from pytest_homeassistant.common import MockConfigEntry
+
+    from custom_components.ha_flightseats import async_setup_entry
+    from custom_components.ha_flightseats.budget import QuotaBudget
+
+    from .conftest import API_KEY
+
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, data={"api_key": API_KEY})
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.ha_flightseats.FlightSeatsStore.async_load"),
+        patch(
+            "custom_components.ha_flightseats.QuotaBudget",
+            return_value=QuotaBudget({"remaining": 3}),
+        ),
+    ):
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, entry)
+    assert not aioclient_mock.mock_calls

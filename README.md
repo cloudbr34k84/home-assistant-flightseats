@@ -14,9 +14,27 @@ Data comes from the [FlightSeats.io API](https://flightseats.io/api/reference). 
 
 ## What this does
 
-You save one or more **watches** (for example "SYD or BNE to LAX, Business, 2 seats, under 250,000 points"). Each watch is polled on a slow schedule and becomes a device with sensors, a binary sensor and an event entity. Automations decide what to do with that, for example send a notification when `New availability` fires.
+You save one or more **watches** (for example "SYD or BNE to LAX, Business, 2 seats, under 250,000 points"). Each watch is polled on a slow schedule and becomes a device with sensors, a binary sensor and an event entity. Adding a watch creates these entities automatically while existing watches keep running. Deleting a watch removes its device, entities and saved results. Automations decide what to do with that, for example send a notification when `New availability` fires.
 
-Version 0.1 covers watches, sensors, change events and quota protection. History and statistics are planned for later releases (see [CHANGELOG.md](CHANGELOG.md)).
+This release covers watches, sensors, change events and quota protection. History and statistics are planned for later releases (see [CHANGELOG.md](CHANGELOG.md)).
+
+### Supported service
+
+This integration connects to the FlightSeats.io cloud search API using a Gold
+account and API key. It supports Qantas (`QF`) and Virgin Australia Velocity (`VA`)
+search programs. There are no physical devices to discover and no local/offline
+mode. Other rewards-search providers and additional program codes are not
+supported by this integration. The airport picker is a convenience list, not a
+claim that every route is available; the API determines coverage.
+
+### Use cases
+
+- Watch several departure airports for a family trip and get notified when enough
+  seats appear in your preferred cabin.
+- Track a points threshold for a particular route without checking the website
+  manually every day.
+- Inspect the shared request allowance before adding more watches or making
+  ad-hoc searches, so other uses of the account keep working.
 
 ### Entities
 
@@ -47,7 +65,54 @@ Points and taxes appear to be per passenger: in a live check they did not change
 
 ### Action
 
-`ha_flightseats.search` runs one ad-hoc search and returns the flights as response data. It uses one request from the daily allowance and shares the same safety reserve.
+`ha_flightseats.search` runs one ad-hoc search and returns the flights as response data. It uses one request from the daily allowance and shares the same safety reserve. The account must be loaded; no watch is required. It does not update watches or generate availability events.
+
+| Field | Required | Values / default |
+|---|---|---|
+| `origins`, `destinations` | Yes | 1–30 three-letter IATA codes each, as comma-separated text or a list |
+| `programs` | No | List containing `QF`, `VA`, or both; default both |
+| `date_from`, `date_to` | No | ISO departure dates (`YYYY-MM-DD`); default today through the program's horizon; end must not be past or before start |
+| `cabins` | No | List of `ECO`, `PRM`, `BUS`, `FIR`; default all |
+| `seats` | No | Minimum seats, 1–9; default 1 (Qantas exposes at most 6) |
+| `limit` | No | Maximum returned flights, 1–200; default 100 |
+| `reward_only` | No | Boolean; default `true` |
+
+Origins × destinations × days must be at most 10,000. Invalid input, an unloaded account
+or insufficient quota raises a validation error; API failures raise an action error.
+
+```yaml
+actions:
+  - action: ha_flightseats.search
+    data:
+      origins: SYD
+      destinations: LAX
+      programs: [QF]
+      cabins: [BUS]
+      seats: 2
+    response_variable: seats
+  - action: persistent_notification.create
+    data:
+      message: "Found {{ seats.count }} flights; {{ seats.requests_remaining }} requests remain."
+```
+
+The response contains `count`, `requests_remaining`, and `results`. Each result includes
+`program`, `origin`, `destination`, `date`, `last_seen`, `duration_minutes`, `segments`
+(route, carriers, flight number and local departure/arrival strings), and `fares`
+(cabin, seats, points, tax, currency and reward flag).
+
+### Triggers and conditions
+
+This integration supplies event entities rather than custom automation triggers or
+conditions. Use a state trigger on a watch's **Availability** event entity and check
+its `event_type`: `new_availability` for newly matching seats, `price_drop` for fewer
+points, or `availability_gone` after two complete checks without a previous match.
+The first check establishes a baseline. The alert cooldown suppresses repeated
+new-availability alerts; see the example below.
+
+For a condition that seats currently match, use a standard state condition on the
+watch's **Seats available** binary sensor (`on`). You can also use numeric state
+conditions on **Best points** or **Matching flights**. Unknown/unavailable states
+should not be treated as proof that no seats exist.
 
 ## Installation
 
@@ -70,18 +135,79 @@ After either installation method, follow **Configuration** below to add the inte
 ## Configuration
 
 1. Settings, Devices & services, **Add integration**, **FlightSeats.io**.
-2. Paste your API key (create it under *API Access* in your FlightSeats.io dashboard). Checking the key uses one request.
+2. Paste your API key (create it under *API Access* in your FlightSeats.io dashboard). Checking the key uses one request; initial account setup uses one more.
 3. On the integration page choose **Add watch** and fill in the form:
    - **Origins / destinations**: pick one or more airports from the searchable list (about 240 common ones, including every Australian and New Zealand airport with scheduled service), or type any 3-letter IATA code. Up to 30 each.
    - **Filters** section: cabins, minimum seats, maximum points, reward fares only.
    - **Date window** section (collapsed): *Days ahead* for a rolling window, or *From/To* for fixed dates, or leave all empty for the program's full search horizon. The API rejects searches where origins x destinations x days is over 10,000; the form checks this for you.
-   - **Schedule and alerts** section (collapsed): how often to check and the alert cooldown.
+   - **Alerts** section (collapsed): the alert cooldown. New watches check every six hours (four requests a day). Existing watches retain their saved schedules when edited.
+
+### Setup and watch fields
+
+| UI field | Meaning, values and default |
+|---|---|
+| API key | Required. Create it under **API Access** in your FlightSeats.io dashboard; it starts with `fs_live_`. Use an active Gold account. |
+| Name | Optional label for a saved watch. Defaults to the selected route and cabins. Rename a watch by editing it. |
+| Programs | Required. Qantas (`QF`), Virgin Australia Velocity (`VA`), or both; default Qantas. |
+| Origins / Destinations | Required. Select or type 1–30 unique three-letter IATA airport codes in each field. |
+| Cabins | Optional. Economy, Premium Economy, Business or First; empty means all cabins. |
+| Minimum seats | Whole number, 1–9; default 1. Qantas exposes at most 6, Velocity at most 9. The selection must be possible for at least one chosen program. |
+| Maximum points | Optional upper points limit, 0–2,000,000 in steps of 1,000. Empty or zero means no limit. |
+| Reward fares only | Default on. Turn off to include non-classic fares such as Classic Plus. |
+| Days ahead | Optional rolling window, up to 365 days ahead; empty or zero uses the program's full horizon. Do not combine with From date or To date. |
+| From date | Optional fixed departure date. Past starts advance to today; empty lets the API choose. |
+| To date | Optional fixed departure end date. Must not precede From date or be in the past. |
+| Alert cooldown (hours) | Whole number, 0–168; default 12. Suppresses another new-availability alert if a seat disappears and returns within that time. Zero disables this suppression. |
+
+Watches check every six hours by default. Existing watches retain their older
+saved intervals. The watch form checks the combined daily allowance and the API's
+10,000-permutation search limit before saving.
+
+### Changing settings and replacing credentials
+
+The account has no separate options flow. On the integration page, edit a watch
+with **Reconfigure** to change its fields above, or add/delete watches. Adding or deleting a
+watch updates its entities without reloading the account. Editing an existing
+watch reloads the entry while preserving its entities' unique IDs. To delete a
+watch, use its subentry menu on the integration page. The account and active watch
+devices cannot be deleted independently of their configuration; orphan device
+entries can be removed from their device page.
+
+If the API rejects your key, Home Assistant requests reauthentication under
+**Settings > Devices & services**. Enter a replacement Gold API key there; it is
+tested before saving, then the existing account reloads. You can also use the
+account entry's **Reconfigure** action to replace a key proactively. Both retain
+watches, device/entity IDs and customizations. The API exposes no stable account
+identifier, so the integration cannot verify that the replacement key belongs to
+the same account; select the intended account's key.
+
+**Check now** stays available during an outage so you can retry. Failed button
+presses and search actions raise an error in the UI and stop an automation. Watch
+data entities become unavailable on an API failure or when quota prevents a due
+check. Quota diagnostics describe the stored shared allowance, with `as_of` marking
+when the API last confirmed it; their availability does not indicate API health.
+The coordinator logs the first failed update and the recovery, without repeating
+the outage on every poll.
+
+### Data updates
+
+The integration polls the cloud; it receives no push updates. A new watch checks
+once when added, then normally every six hours. Fresh saved watch data is reused
+after restart. Network/server failures retry after 30 minutes, and the normal
+interval resumes after success. Quota-blocked checks also schedule a catch-up
+about two minutes after the reported reset, subject to request spacing. Expired
+fixed-date watches stop making requests until their date window is edited.
+
+FlightSeats.io returns its own cached data. **Data freshness** reports the newest
+upstream `lastSeen` among matching flights, not the time HA last checked. The
+**Seats available** attribute `last_checked` records the last successful HA fetch.
+No upstream refresh cadence or maximum data age is guaranteed by this integration.
 
 ### Quota: 200 requests a day, shared
 
 The API allows 200 requests per UTC day and 10 per minute. The allowance belongs to the Gold account, so it is **shared with the FlightSeats.io website and any other API key**. The integration protects it like this:
 
-- Every check is one request. The form refuses a watch that would push the combined plan over 190 requests a day.
+- Every check is one request. Setting up an account without watches also uses one request to validate access. The form refuses a watch that would push the combined plan over 190 requests a day. Six-hour checks balance cached availability against the shared quota. For a custom schedule, use Home Assistant’s [polling controls](https://www.home-assistant.io/common-tasks/general/#defining-a-custom-polling-interval) and the Check now button action; quota guards still apply.
 - Requests are spaced at least 7 seconds apart.
 - Scheduled checks stop when 10 or fewer requests remain; the button and the search action can use the last few down to 3.
 - It trusts the API's own remaining count over its own.
@@ -93,7 +219,7 @@ The API allows 200 requests per UTC day and 10 per minute. The allowance belongs
 - A seat is reported as **gone** only after it is missing from two complete checks in a row. If the API returned its maximum number of results, nothing is inferred from what is missing.
 - A seat that disappears and comes back inside the alert cooldown does not raise a second `new_availability`.
 - At most one event of each type is raised per check, carrying the best match and up to five matches.
-- Brief outages keep the last data; entities go unavailable after three failed checks in a row.
+- A failed check immediately makes watch data entities unavailable. The last result is retained internally for comparisons after recovery; a successful empty search stays available and reports no matches. Connection failures retry after 30 minutes, then return to the normal interval after recovery.
 
 ### Example automation
 
@@ -101,34 +227,103 @@ The API allows 200 requests per UTC day and 10 per minute. The allowance belongs
 alias: Reward seat found
 triggers:
   - trigger: state
-    entity_id: event.syd_lax_bus_availability
+    entity_id: event.syd_lax_bus_availability_flightseats
 conditions:
   - condition: template
-    value_template: "{{ trigger.to_state.state not in ['unknown', 'unavailable'] }}"
+    value_template: >-
+      {{ trigger.to_state is not none
+         and trigger.to_state.state not in ['unknown', 'unavailable']
+         and as_timestamp(trigger.to_state.state, 0)
+             >= as_timestamp(trigger.to_state.last_changed) - 1 }}
   - condition: template
     value_template: "{{ trigger.to_state.attributes.event_type == 'new_availability' }}"
 actions:
-  - action: script.notify_household
+  - action: persistent_notification.create
     data:
       message: >
         {{ trigger.to_state.attributes.count }} new seat(s) SYD to LAX:
-        {{ trigger.to_state.attributes.points }} points + ${{ trigger.to_state.attributes.tax }}
+        {{ trigger.to_state.attributes.points }} points + {{ trigger.to_state.attributes.tax }} {{ trigger.to_state.attributes.currency }}
         on {{ trigger.to_state.attributes.date }}
         ({{ trigger.to_state.attributes.flight_numbers | join(', ') }}).
         Confirm on the airline site before booking.
 ```
+
+Replace the sample entity IDs with those from your watch. The timestamp condition
+ignores old event timestamps restored after an outage. For phone notifications,
+replace `persistent_notification.create` with your own notify action.
+
+### Example: notify below a points threshold
+
+```yaml
+alias: Reward points below target
+triggers:
+  - trigger: numeric_state
+    entity_id: sensor.syd_lax_bus_best_points_flightseats
+    below: 150000
+conditions:
+  - condition: state
+    entity_id: binary_sensor.syd_lax_bus_seats_available_flightseats
+    state: "on"
+actions:
+  - action: persistent_notification.create
+    data:
+      title: Reward seat price target reached
+      message: >-
+        Best matching fare is now
+        {{ states('sensor.syd_lax_bus_best_points_flightseats') }} points.
+        Confirm availability and pricing on the airline site before booking.
+```
+
+Numeric state triggers fire when the value crosses the threshold; they do not
+repeat every poll while it stays below the target. Returning from an unavailable
+state can cause a new crossing and notification.
+
+## Known limitations
+
+- Availability is cached, not a live seat hold or booking guarantee. The integration
+  cannot book flights, reserve inventory, transfer points or refresh the provider's cache.
+- Only one account is configured at a time. API keys expose no account identity for
+  replacement-key verification. Other programs/providers are not supported.
+- Searches return up to 500 flights for a watch and up to 200 for the search action;
+  no pagination is implemented. A full watch result is treated as incomplete, so
+  missing fares do not produce gone-seat alerts.
+- Sensor result attributes keep the top ten matches; events carry up to five. Raw
+  result lists are excluded from recorder history. There is no complete fare archive.
+- At most one event of each type is emitted per check. Simultaneous event types
+  may overwrite the event entity's latest state; it is not a durable event queue.
+- Departure and arrival strings have no timezone supplied by the API; the
+  integration does not infer one. Taxes use the returned currency and are not converted.
+- The account's daily allowance is shared with the website and other API keys.
+  Quota sensors reflect the last headers and local accounting, not a live global count.
+- First checks establish a baseline and do not alert. Reload/restart can delay the
+  next regular check; narrow fixed date windows may expire before another poll.
 
 ## Troubleshooting
 
 | Symptom | Cause and fix |
 |---|---|
 | "Invalid API key" | The key was revoked or mistyped. Create a new one and use *Reconfigure* |
-| Repair "FlightSeats.io needs a Gold plan" | The account is not on an active Gold plan |
-| Entities show the last values and `Requests remaining today` is low | The shared daily allowance is nearly used. Checks resume after the reset (UTC midnight) |
+| Repair "FlightSeats.io needs a Gold plan" | Check the subscription and API Access in FlightSeats.io. Upgrade/renew the intended account, or use account **Reconfigure** with a Gold key. Retry **Check now** or reload the account; a confirmed successful request clears the repair |
+| Watch entities are unavailable and `Requests remaining today` is low | The shared daily allowance is nearly used. Checks resume after the reset (UTC midnight) |
 | `Matching flights` has `api_limit_reached: true` | More than 500 flights matched. Narrow the watch (fewer airports, shorter window) |
-| Watch says the window expired | A fixed *To* date has passed. Edit the watch |
+| Watch says the window expired | A fixed *To* date has passed. Edit the watch and choose a future end date or rolling window |
+| "Unable to reach FlightSeats.io" / unavailable watch values | Check HA's internet access and FlightSeats.io service availability. After restoring connectivity, use **Check now** or wait for the 30-minute network-error retry |
+| A sensor is missing | **Earliest date** and **Daily request limit** are disabled initially. Open the device's entity list, enable the desired entity, and reload the entry |
+| No notification on the first check | Expected: the first successful result sets a baseline. Later newly matching seats or points drops produce events. Confirm your automation uses the actual `_flightseats` entity ID |
 
-Diagnostics (device page, three-dot menu) redact the API key and make no API request.
+Download diagnostics from **Settings > Devices & services > FlightSeats.io**, using the account entry's three-dot menu. They redact the API key and route/date criteria, omit watch names and raw fares, and make no API request. If the steps above do not resolve the problem, attach diagnostics and the HA/integration versions to a GitHub issue. Remove any private information from additional logs or screenshots before sharing.
+
+## Removing the integration
+
+1. Open **Settings > Devices & services > FlightSeats.io**.
+2. Open the account entry's three-dot menu and select **Delete**, then confirm.
+3. Remove or update automations and dashboards that reference its entities or search action.
+4. To uninstall the files, remove FlightSeats.io in HACS (or delete
+   `/config/custom_components/ha_flightseats` for a manual install) and restart Home Assistant.
+
+Deleting the entry removes its devices, entities, watches and saved results/quota file.
+It does not cancel your FlightSeats.io subscription or revoke the API key; manage those
+in your FlightSeats.io dashboard if you no longer need them.
 
 ## Recovery
 
@@ -157,10 +352,14 @@ home-assistant-flightseats/
 
 All runtime modules and brand assets live inside `custom_components/ha_flightseats/`; tests and development documentation stay outside it.
 
-The release version is **0.1.3** in `manifest.json`. For each release, update that version using `MAJOR.MINOR.PATCH`, document the changes in `CHANGELOG.md`, and push a matching tag such as `v0.1.3`. The Release workflow checks the version and changelog, runs Tests, HACS and Hassfest, then automatically publishes the GitHub release with the versioned changelog notes. Preparing these files does not publish a release. HACS downloads the integration directory from the selected tag; no custom ZIP packaging is configured.
+The release version is **0.2.0** in `manifest.json`. For each release, update that version using `MAJOR.MINOR.PATCH`, document the changes in `CHANGELOG.md`, and push a matching tag such as `v0.2.0`. The Release workflow checks the version and changelog, runs Tests, HACS and Hassfest, then automatically publishes the GitHub release with the versioned changelog notes. Preparing these files does not publish a release. HACS downloads the integration directory from the selected tag; no custom ZIP packaging is configured.
 
 Before distributing, verify the GitHub repository is public, has a description and issues enabled, and has topics `hacs`, `home-assistant`, `homeassistant`, `custom-integration`, and `aurora-smart-home`.
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, local checks, pull requests and release preparation. Use the [issue forms](https://github.com/cloudbr34k84/home-assistant-flightseats/issues/new/choose) for bugs and feature requests.
+
+## Quality scale progress
+
+Implementation evidence and checklist status are tracked in [docs/QUALITY_SCALE.md](docs/QUALITY_SCALE.md). Bronze, Silver, Gold and Platinum requirements are implemented for custom distribution, with documented discovery exemptions. This custom integration does not claim an official Home Assistant tier.

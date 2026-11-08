@@ -5,6 +5,7 @@ try:  # Home Assistant 2026.10 serialises forms with probatio
 except ImportError:  # older versions use voluptuous-serialize
     from voluptuous_serialize import convert as serialise
 
+import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -48,7 +49,8 @@ async def test_user_flow_creates_entry(hass: HomeAssistant, aioclient_mock):
     result = await _start(hass)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"] == {CONF_API_KEY: API_KEY}
-    assert len(aioclient_mock.mock_calls) == 1  # validation costs one request
+    assert result["result"].unique_id == DOMAIN
+    assert len(aioclient_mock.mock_calls) == 2  # validation and account startup
 
 
 async def test_user_flow_errors(hass: HomeAssistant, aioclient_mock):
@@ -78,6 +80,7 @@ async def test_user_flow_errors(hass: HomeAssistant, aioclient_mock):
         result["flow_id"], {CONF_API_KEY: API_KEY}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == DOMAIN
 
 
 async def test_only_one_entry(hass: HomeAssistant, aioclient_mock, mock_entry):
@@ -104,7 +107,7 @@ async def test_reauth_updates_key(hass: HomeAssistant, aioclient_mock, mock_entr
 SECTIONS = {
     "filters": ("cabins", CONF_MIN_SEATS, "max_points", CONF_REWARD_ONLY),
     "dates": (CONF_DAYS_AHEAD, "date_from", "date_to"),
-    "schedule": (CONF_INTERVAL_HOURS, CONF_COOLDOWN_HOURS),
+    "schedule": (CONF_COOLDOWN_HOURS,),
 }
 
 
@@ -116,7 +119,6 @@ def _watch_input(**overrides):
         CONF_DESTINATIONS: ["LAX"],
         CONF_MIN_SEATS: 2,
         CONF_REWARD_ONLY: True,
-        CONF_INTERVAL_HOURS: 6,
         CONF_COOLDOWN_HOURS: 12,
         **overrides,
     }
@@ -178,7 +180,12 @@ async def test_watch_validation_errors(hass: HomeAssistant, aioclient_mock, mock
         result = await _add_watch(hass, mock_entry, user_input)
         assert result["type"] is FlowResultType.FORM, error
         assert result["errors"].get(field) == error, error
-        hass.config_entries.subentries.async_abort(result["flow_id"])
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], _watch_input()
+        )
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["unique_id"] is None
+        await hass.async_block_till_done()
 
 
 async def test_watch_too_many_permutations(
@@ -193,6 +200,11 @@ async def test_watch_too_many_permutations(
         hass, mock_entry, _watch_input(**{CONF_ORIGINS: ten, CONF_DESTINATIONS: ten})
     )
     assert result["errors"]["base"] == "too_many_permutations"
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], _watch_input()
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["unique_id"] is None
 
 
 async def test_reconfigure_watch(hass: HomeAssistant, aioclient_mock, mock_entry):
@@ -206,9 +218,18 @@ async def test_reconfigure_watch(hass: HomeAssistant, aioclient_mock, mock_entry
         },
     )
     assert result["step_id"] == "reconfigure"
+    # Existing schedules survive an edit although new watches no longer ask for one.
+    subentry = mock_entry.subentries[subentry_id]
+    hass.config_entries.async_update_subentry(
+        mock_entry, subentry, data={**subentry.data, CONF_INTERVAL_HOURS: 12}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], _watch_input(**{CONF_ORIGINS: ["bad-code"]})
+    )
+    assert result["errors"] == {CONF_ORIGINS: "invalid_codes"}
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
-        {**_watch_input(**{CONF_INTERVAL_HOURS: 12}), "name": "Renamed"},
+        {**_watch_input(), "name": "Renamed"},
     )
     assert result["type"] is FlowResultType.ABORT
     assert mock_entry.subentries[subentry_id].title == "Renamed"
@@ -238,6 +259,13 @@ async def test_over_budget(hass: HomeAssistant, aioclient_mock):
     result = await _add_watch(hass, entry, _watch_input())
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "over_budget"}
+    # The shared account allowance may change; retrying the same form succeeds.
+    entry.runtime_data.budget.limit = 300
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], _watch_input()
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["unique_id"] is None
 
 
 async def test_form_serialises_with_sections_and_airports(
@@ -268,3 +296,102 @@ async def test_form_serialises_with_sections_and_airports(
     assert {"value": "SYD", "label": "SYD – Sydney, AU"} in origins["options"]
     assert len(origins["options"]) > 200
     assert result["description_placeholders"]["allowed"] == "190"
+
+
+@pytest.mark.parametrize("source", ["user", "reauth", "reconfigure"])
+@pytest.mark.parametrize(
+    "status,error",
+    [
+        (401, "invalid_auth"),
+        (403, "not_gold"),
+        (429, "rate_limited"),
+        (500, "cannot_connect"),
+        (400, "unknown"),
+        (418, "unknown"),
+    ],
+)
+async def test_key_error_recovery(
+    hass, aioclient_mock, mock_entry, source, status, error
+):
+    """Every key error can recover in each credential flow."""
+    if source == "user":
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": source}
+        )
+    else:
+        mock_entry.add_to_hass(hass)
+        if source == "reauth":
+            result = await mock_entry.start_reauth_flow(hass)
+        else:
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": source, "entry_id": mock_entry.entry_id}
+            )
+    aioclient_mock.get(SEARCH_URL, status=status, json={}, headers=rate_headers())
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: API_KEY}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": error}
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(SEARCH_URL, json=payload(), headers=rate_headers())
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: API_KEY}
+    )
+    if source == "user":
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["result"].unique_id == DOMAIN
+    else:
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == f"{source}_successful"
+        assert mock_entry.unique_id == DOMAIN
+
+
+@pytest.mark.parametrize(
+    "field,value,error",
+    [
+        ("destinations", ["bad-code"], "invalid_codes"),
+        ("min_seats", 1.5, "invalid_number"),
+        ("date_to", "2020-01-01", "window_in_past"),
+    ],
+)
+async def test_watch_error_recovery(hass, mock_entry, field, value, error):
+    """Reject malformed watch data and accept a corrected form in the same flow."""
+    mock_entry.add_to_hass(hass)
+    result = await _add_watch(hass, mock_entry, _watch_input(**{field: value}))
+    if error:
+        assert error in result["errors"].values()
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], _watch_input()
+        )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["unique_id"] is None
+
+
+def test_long_auto_name():
+    """Long routes stay readable and include selected cabins."""
+    from custom_components.ha_flightseats.config_flow import _auto_name
+
+    assert (
+        _auto_name(["SYD", "MEL", "BNE", "PER"], ["LAX"], ["BUS"])
+        == "SYD/MEL/BNE+1 → LAX BUS"
+    )
+
+
+@pytest.mark.parametrize(
+    "field,value,error",
+    [
+        ("programs", ["XX"], "no_programs"),
+        ("cabins", ["XX"], "invalid_cabins"),
+        ("min_seats", "not a number", "invalid_number"),
+        ("date_from", "not a date", "invalid_date"),
+    ],
+)
+def test_defensive_watch_validation(mock_entry, field, value, error):
+    """Validate malformed callers independently of the frontend selector validation."""
+    from custom_components.ha_flightseats.config_flow import WatchSubentryFlow
+
+    flow = WatchSubentryFlow()
+    _, errors = flow._validate(mock_entry, {**WATCH_DATA, field: value}, None)
+    assert error in errors.values()
+    _, errors = flow._validate(mock_entry, WATCH_DATA, None)
+    assert not errors

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .api import Flight, SearchParams
+from .api import Fare, Flight, SearchParams
 from .const import (
     ASSUMED_HORIZON_DAYS,
     CONF_CABINS,
@@ -73,7 +73,7 @@ class WatchConfig:
     cooldown_hours: int = DEFAULT_COOLDOWN_HOURS
 
     @classmethod
-    def from_data(cls, data: dict[str, Any]) -> WatchConfig:
+    def from_data(cls, data: Mapping[str, Any]) -> WatchConfig:
         """Build a watch from stored subentry data."""
         return cls(
             programs=list(data.get(CONF_PROGRAMS) or DEFAULT_PROGRAMS),
@@ -156,7 +156,7 @@ def _stops(flight: Flight) -> int:
     return max(len(flight.segments) - 1, 0)
 
 
-def match_dict(flight: Flight, fare: Any) -> dict[str, Any]:
+def match_dict(flight: Flight, fare: Fare) -> dict[str, Any]:
     """Return a JSON-serialisable record for one flight and fare."""
     numbers = flight.flight_numbers
     key = "|".join(
@@ -224,8 +224,9 @@ def summarise(matches: list[dict[str, Any]]) -> dict[str, Any]:
             without_last_seen += 1
     best = min(matches, key=lambda m: (m["points"], m["date"]), default=None)
     earliest = min(matches, key=lambda m: (m["date"], m["points"]), default=None)
-    parsed = [dt_util.parse_datetime(value) for value in seen]
-    parsed = [value for value in parsed if value is not None]
+    parsed = [
+        stamp for value in seen if (stamp := dt_util.parse_datetime(value)) is not None
+    ]
     return {
         "best": best,
         "earliest": earliest,

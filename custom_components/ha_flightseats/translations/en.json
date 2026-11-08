@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to FlightSeats.io",
-        "description": "Enter your FlightSeats.io API key. Checking it uses one request from your daily allowance. After setup, add watches from the integration page.",
+        "description": "Enter your FlightSeats.io API key. Checking it uses one request from your daily allowance; account setup uses one more. After setup, add watches from the integration page.",
         "data": {
           "api_key": "API key"
         },
@@ -99,14 +99,12 @@
               }
             },
             "schedule": {
-              "name": "Schedule and alerts",
-              "description": "How often to check and how quiet to keep alerts.",
+              "name": "Alerts",
+              "description": "Checks run every six hours. Choose how quiet to keep alerts.",
               "data": {
-                "interval_hours": "Check every (hours)",
                 "cooldown_hours": "Alert cooldown (hours)"
               },
               "data_description": {
-                "interval_hours": "Each check uses one request from the shared 200 a day.",
                 "cooldown_hours": "A seat that vanishes and returns within this time does not alert twice."
               }
             }
@@ -159,14 +157,12 @@
               }
             },
             "schedule": {
-              "name": "Schedule and alerts",
-              "description": "How often to check and how quiet to keep alerts.",
+              "name": "Alerts",
+              "description": "Checks run every six hours. Choose how quiet to keep alerts.",
               "data": {
-                "interval_hours": "Check every (hours)",
                 "cooldown_hours": "Alert cooldown (hours)"
               },
               "data_description": {
-                "interval_hours": "Each check uses one request from the shared 200 a day.",
                 "cooldown_hours": "A seat that vanishes and returns within this time does not alert twice."
               }
             }
@@ -181,7 +177,7 @@
         "date_order": "The to date must not be before the from date.",
         "window_in_past": "The to date has already passed.",
         "too_many_permutations": "Origins \u00d7 destinations \u00d7 days is over the API limit of 10,000. Use fewer airports or a shorter window.",
-        "over_budget": "With this interval the watches would use more than the daily request allowance. Increase the interval or remove a watch.",
+        "over_budget": "These watches would exceed the daily request allowance. Remove a watch or try again after the API reports a higher limit.",
         "invalid_number": "Enter a whole number within the allowed range.",
         "invalid_date": "Enter a valid date.",
         "invalid_cabins": "Select supported cabins."
@@ -270,6 +266,15 @@
     },
     "invalid_programs": {
       "message": "Select at least one supported program."
+    },
+    "refresh_failed": {
+      "message": "Unable to refresh this watch. Check the connection, API key, Gold plan and remaining quota, then try again."
+    },
+    "cannot_connect": {
+      "message": "Unable to reach FlightSeats.io. Check the network connection and try again."
+    },
+    "search_rejected": {
+      "message": "FlightSeats.io rejected the search. Check the route, date window and filters, then try again."
     }
   },
   "issues": {

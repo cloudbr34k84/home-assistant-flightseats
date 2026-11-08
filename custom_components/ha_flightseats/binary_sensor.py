@@ -8,10 +8,9 @@ from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import SUBENTRY_TYPE_WATCH
 from .coordinator import FlightSeatsWatchCoordinator
 from .data import FlightSeatsConfigEntry
-from .entity import FlightSeatsWatchEntity
+from .entity import FlightSeatsWatchEntity, async_setup_watch_entities
 
 PARALLEL_UPDATES = 0
 
@@ -61,11 +60,9 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up one binary sensor per watch."""
-    for subentry in entry.subentries.values():
-        coordinator = entry.runtime_data.coordinators.get(subentry.subentry_id)
-        if subentry.subentry_type != SUBENTRY_TYPE_WATCH or coordinator is None:
-            continue
-        async_add_entities(
-            [SeatsAvailableBinarySensor(coordinator)],
-            config_subentry_id=subentry.subentry_id,
-        )
+    async_setup_watch_entities(
+        hass,
+        entry,
+        async_add_entities,
+        lambda coordinator: [SeatsAvailableBinarySensor(coordinator)],
+    )

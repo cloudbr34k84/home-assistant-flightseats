@@ -259,6 +259,20 @@ class FlightSeatsClient:
             "Authorization": f"Bearer {api_key}",
         }
 
+    async def async_check_connection(self) -> SearchResponse:
+        """Validate access with a minimal search; uses one request."""
+        today = dt_util.utcnow().date()
+        return await self.async_search(
+            SearchParams(
+                programs=["QF"],
+                origins=["SYD"],
+                destinations=["MEL"],
+                date_from=today,
+                date_to=today,
+                limit=1,
+            )
+        )
+
     async def async_search(self, params: SearchParams) -> SearchResponse:
         """Run a search and return flights plus the rate-limit state."""
         url = f"{API_BASE}{API_SEARCH_PATH}"

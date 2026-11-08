@@ -21,10 +21,13 @@ async def async_get_config_entry_diagnostics(
     budget = runtime.budget
     watches = {}
     for subentry_id, coordinator in runtime.coordinators.items():
+        subentry = entry.subentries.get(subentry_id)
+        if subentry is None:
+            continue  # Removal may be waiting for its update listener.
         data = coordinator.data
         watches[subentry_id] = {
             "config": async_redact_data(
-                dict(entry.subentries[subentry_id].data),
+                dict(subentry.data),
                 {"origins", "destinations", "date_from", "date_to", "name"},
             ),
             "last_update_success": coordinator.last_update_success,
