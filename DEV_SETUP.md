@@ -1,5 +1,8 @@
 # Local Development Setup
 
+Repository: `https://github.com/cloudbr34k84/ha-flightseats`.
+The local checkout is `/homeassistant/brads_dev/ha-flightseats`.
+
 The repository uses the standard HACS layout: source lives in
 `custom_components/ha_flightseats/`, with tests in `tests/` and the saved API
 specification in `docs/openapi.json`.

@@ -5,10 +5,10 @@
     "@cloudbr34k84"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/cloudbr34k84/home-assistant-flightseats",
+  "documentation": "https://github.com/cloudbr34k84/ha-flightseats",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/cloudbr34k84/home-assistant-flightseats/issues",
+  "issue_tracker": "https://github.com/cloudbr34k84/ha-flightseats/issues",
   "requirements": [],
   "single_config_entry": true,
   "version": "0.2.0"

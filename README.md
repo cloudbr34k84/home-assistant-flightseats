@@ -13,6 +13,13 @@ Watch cached Qantas and Virgin Australia Velocity **reward seat availability** f
 
 Data comes from the [FlightSeats.io API](https://flightseats.io/api/reference). It needs a **FlightSeats.io Gold plan** and your own API key. The data is cached, not live airline inventory: always confirm on the airline's site before booking.
 
+## Repository name
+
+The repository is **ha-flightseats**. The Home Assistant integration is still
+**FlightSeats.io**, with domain `ha_flightseats`. The repository rename does not
+require recreating watches or changing entity IDs. Use the updated HACS link
+below when adding the custom repository.
+
 ## What this does
 
 You save one or more **watches** (for example "SYD or BNE to LAX, Business, 2 seats, under 250,000 points"). Each watch is polled on a slow schedule and becomes a device with sensors, a binary sensor and an event entity. Adding a watch creates these entities automatically while existing watches keep running. Deleting a watch removes its device, entities and saved results. Automations decide what to do with that, for example send a notification when `New availability` fires.
@@ -119,17 +126,17 @@ should not be treated as proof that no seats exist.
 
 ### HACS (custom repository)
 
-[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=cloudbr34k84&repository=home-assistant-flightseats&category=integration)
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=cloudbr34k84&repository=ha-flightseats&category=integration)
 
 HACS must already be installed. The repository must be public and contain these files before HACS can download it. This is a custom repository; it is not a claim of inclusion in the default HACS catalog.
 
 1. HACS, Integrations, three-dot menu, Custom repositories.
-2. Add `https://github.com/cloudbr34k84/home-assistant-flightseats` as an Integration.
+2. Add `https://github.com/cloudbr34k84/ha-flightseats` as an Integration.
 3. Install **FlightSeats.io** and restart Home Assistant.
 
 ### Manual
 
-Download the desired version from the [GitHub releases](https://github.com/cloudbr34k84/home-assistant-flightseats/releases). Copy the entire `custom_components/ha_flightseats` directory into `/config/custom_components/ha_flightseats` (create `custom_components` if needed), then restart Home Assistant. The resulting path must be `/config/custom_components/ha_flightseats/manifest.json`; avoid nesting another `custom_components` directory inside it.
+Download the desired version from the [GitHub releases](https://github.com/cloudbr34k84/ha-flightseats/releases). Copy the entire `custom_components/ha_flightseats` directory into `/config/custom_components/ha_flightseats` (create `custom_components` if needed), then restart Home Assistant. The resulting path must be `/config/custom_components/ha_flightseats/manifest.json`; avoid nesting another `custom_components` directory inside it.
 
 After either installation method, follow **Configuration** below to add the integration.
 
@@ -337,7 +344,7 @@ The FlightSeats.io API is for personal or internal use. Do not resell or bulk-re
 ## Repository and releases
 
 ```text
-home-assistant-flightseats/
+ha-flightseats/
 ├── custom_components/
 │   └── ha_flightseats/
 │       ├── __init__.py
@@ -359,7 +366,7 @@ Before distributing, verify the GitHub repository is public, has a description a
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, local checks, pull requests and release preparation. Use the [issue forms](https://github.com/cloudbr34k84/home-assistant-flightseats/issues/new/choose) for bugs and feature requests.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, local checks, pull requests and release preparation. Use the [issue forms](https://github.com/cloudbr34k84/ha-flightseats/issues/new/choose) for bugs and feature requests.
 
 ## Quality scale progress
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changes
+
+- Rename the GitHub repository and development checkout to `ha-flightseats`.
+- Update manifest links, HACS installation links and contributor instructions.
+- Keep the `ha_flightseats` integration domain, watches and entity identifiers unchanged.
+
 ## 0.2.0 (2026-11-10)
 
 ### Changes
