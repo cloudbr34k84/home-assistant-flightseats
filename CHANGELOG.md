@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (2026-11-09)
+## 0.2.0 (2026-11-10)
 
 ### Changes
 
@@ -12,7 +12,9 @@
 - Classify watch freshness as diagnostic and improve diagnostics privacy and behavior during watch deletion.
 - Complete the Bronze-through-Platinum development checklist for custom distribution, with evidence and justified exemptions. Bundled branding meets current custom-integration guidance; this is not an official Home Assistant tier award.
 - Expand setup, action, removal, data-update, troubleshooting and limitations documentation, including notification examples.
-- Enforce strict typing and per-module coverage in CI; include the typed-package marker.
+- Enforce strict typing and 100% line/branch coverage for every production module in CI; include the typed-package marker.
+- Run the complete test suite against both the Home Assistant 2026.8.0 minimum and the 2026.11.0 development target.
+- Add the repository banner to the README and refresh release-validation documentation.
 
 ### Upgrade notes
 
@@ -24,8 +26,8 @@
 
 ### Validation
 
-- **154 mocked tests pass** against Home Assistant 2026.11.0 on Python 3.14.
-- Strict mypy passes for all **19 production modules**. Every module exceeds **95% combined line/branch coverage**; config flow and diagnostics have **100%** coverage.
+- **161 mocked tests pass** against Home Assistant 2026.8.0 and 2026.11.0 on Python 3.14.
+- Strict mypy passes for all **19 production modules**. Every module has **100% line and branch coverage**.
 - Ruff lint/format and release metadata checks pass. No live FlightSeats API requests are needed for these checks.
 
 ## 0.1.3 (2026-11-07)
@@ -61,4 +63,4 @@ First release.
 - `ha_flightseats.search` action (response only).
 - Diagnostics with the key redacted; repair issue when the account is not Gold.
 
-Planned: 0.2 availability log and history sensors, 0.3 long-term statistics and a card or calendar.
+Future releases may add availability history, long-term statistics, and a card or calendar.

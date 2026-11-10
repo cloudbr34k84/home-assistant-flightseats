@@ -160,7 +160,8 @@ async def test_plan_repair_lifecycle(hass, aioclient_mock, mock_entry, source):
             assert error.value.translation_key == "not_gold"
     issue_id = f"{ISSUE_NOT_GOLD}_{mock_entry.entry_id}"
     issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
-    assert issue.config_entry_id == mock_entry.entry_id
+    if hasattr(issue, "config_entry_id"):
+        assert issue.config_entry_id == mock_entry.entry_id
     assert issue.translation_key == "not_gold"
     assert await hass.config_entries.async_unload(mock_entry.entry_id)
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None

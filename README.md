@@ -1,4 +1,4 @@
-<p align="center"><img src="custom_components/ha_flightseats/brand/logo@2x.png" alt="FlightSeats.io for Home Assistant" width="220"></p>
+<p align="center"><img src="FlightSeats.io%20Home%20Assistant%20Integration.png" alt="FlightSeats.io for Home Assistant"></p>
 
 # FlightSeats.io for Home Assistant
 
@@ -6,7 +6,8 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://www.hacs.xyz/)
 
-**Requires Home Assistant 2026.8.0 or newer.** Development tests currently target 2026.11.0.
+**Requires Home Assistant 2026.8.0 or newer.** CI runs the complete suite against
+both the 2026.8.0 minimum and the current 2026.11.0 development target.
 
 Watch cached Qantas and Virgin Australia Velocity **reward seat availability** from Home Assistant, and get an event when a seat you care about opens up.
 

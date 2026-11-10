@@ -1,7 +1,15 @@
 """Entity naming and entity ID migration tests."""
 
+from unittest.mock import patch
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+
+from custom_components.ha_flightseats import (
+    _async_migrate_entity_ids,
+    _async_update_entry,
+)
+from custom_components.ha_flightseats.const import DOMAIN
 
 from .conftest import flight, payload, setup_entry
 
@@ -83,3 +91,28 @@ async def test_legacy_entity_ids_are_renamed(
         registry.async_get("sensor.flightseats_io_api_requests_remaining_today")
         is not None
     )
+
+
+async def test_legacy_entity_collision_is_left_unchanged(
+    hass: HomeAssistant, aioclient_mock, mock_entry
+):
+    await setup_entry(hass, mock_entry, aioclient_mock, payload(flight()))
+    registry = er.async_get(hass)
+    subentry_id = next(iter(mock_entry.subentries))
+    legacy = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "legacy_collision",
+        suggested_object_id="syd_lax_bus_best_points",
+        config_entry=mock_entry,
+        config_subentry_id=subentry_id,
+    )
+    assert legacy.entity_id == "sensor.syd_lax_bus_best_points"
+    _async_migrate_entity_ids(hass, mock_entry)
+    assert registry.async_get(legacy.entity_id) is legacy
+
+
+async def test_unloaded_entry_update_is_ignored(hass: HomeAssistant, mock_entry):
+    with patch.object(mock_entry, "async_create_background_task") as create_task:
+        await _async_update_entry(hass, mock_entry)
+    create_task.assert_not_called()

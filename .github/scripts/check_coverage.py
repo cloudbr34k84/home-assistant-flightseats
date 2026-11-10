@@ -1,4 +1,4 @@
-"""Enforce Per-module coverage and full config-flow/diagnostics coverage."""
+"""Enforce 100% line and branch coverage in every integration module."""
 
 import json
 import sys
@@ -17,18 +17,17 @@ for name in sorted(expected):
     if "num_branches" not in summary:
         errors.append(f"{name}: branch coverage was not collected")
         continue
-    total = summary["num_statements"] + summary["num_branches"]
-    covered = summary["covered_lines"] + summary["covered_branches"]
-    if total and covered * 100 <= total * 95:
-        errors.append(f"{name}: {covered / total:.2%}; must exceed 95%")
-    if name.endswith(("/config_flow.py", "/diagnostics.py")) and covered != total:
+    missing_lines = summary["num_statements"] - summary["covered_lines"]
+    missing_branches = summary["num_branches"] - summary["covered_branches"]
+    if missing_lines or missing_branches:
         errors.append(
-            f"{name}: config flow/diagnostics must have 100% line and branch coverage"
+            f"{name}: {missing_lines} uncovered lines and "
+            f"{missing_branches} uncovered branches; both must be zero"
         )
 if not expected:
     errors.append("No integration modules found")
 if errors:
     raise SystemExit("\n".join(errors))
 print(
-    f"Coverage passed: all {len(expected)} modules exceed 95%; config flow and diagnostics are 100%."
+    f"Coverage passed: all {len(expected)} modules have 100% line and branch coverage."
 )

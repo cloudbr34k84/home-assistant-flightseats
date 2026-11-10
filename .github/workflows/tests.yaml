@@ -64,3 +64,25 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 14
+
+  minimum-version:
+    name: Home Assistant 2026.8 minimum
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test_minimum.txt
+
+      - name: Install minimum-version test dependencies
+        run: python -m pip install -r requirements_test_minimum.txt
+
+      - name: Run complete suite on the minimum version
+        run: python -m pytest tests/ -q

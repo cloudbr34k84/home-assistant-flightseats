@@ -65,7 +65,7 @@ rules:
     comment: New keys are validated then explicitly reload the entry, preserving watch/device/entity identities. API has no stable account identifier to compare.
   test-coverage:
     status: done
-    comment: CI requires more than 95% line/branch coverage in every module and 100% in config_flow.py.
+    comment: CI requires 100% line and branch coverage in every production module; the complete suite also runs on the HA 2026.8 minimum.
   # Gold
   devices:
     status: done

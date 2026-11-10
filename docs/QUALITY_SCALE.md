@@ -65,7 +65,7 @@ custom integration. This does not confer an official Home Assistant quality-scal
 | `log-when-unavailable` | Coordinator owns outage/recovery messages. Repeated failures do not produce integration-level warnings; regression test asserts one failure and one recovery log for three failed polls. |
 | `parallel-updates` | Sensor, binary sensor and event platforms set 0 because they use fetched data. Button sets 1; the shared budget serializes quota acquisition and spaces API calls, including search actions. |
 | `reauthentication-flow` | Setup/coordinator authentication failures and rejected search credentials start reauth. Successful reauth validates the new key and explicitly reloads the entry. Test verifies the new runtime client/header, retained watch IDs and unchanged entity registry identities. No stable account identity is available from this search API; README explains that limitation. |
-| `test-coverage` | CI collects branch coverage and checks each module independently with `.github/scripts/check_coverage.py`. Every module must exceed 95% combined line/branch coverage; config flow and diagnostics must remain 100%. Missing modules or branch data fail the check. |
+| `test-coverage` | CI collects branch coverage and checks each module independently with `.github/scripts/check_coverage.py`. Every production module must retain 100% line and branch coverage. Missing modules or branch data fail the check. The complete suite also runs against the HA 2026.8 minimum. |
 
 ## Gold evidence
 
@@ -108,8 +108,8 @@ Repair tests cover startup without watches, scheduled polls, ad-hoc search,
 unload/reload, confirmed recovery, and cleanup on older supported HA versions.
 The HA 2026.8 [issue registry API](https://github.com/home-assistant/core/blob/2026.8.0/homeassistant/helpers/issue_registry.py)
 does not accept `config_entry_id`; the helper supplies it only when supported.
-The minimum remains HA 2026.8; the full suite targets HA 2026.11, not every
-supported release.
+The complete suite passes on both the HA 2026.8 minimum and the HA 2026.11
+development target.
 
 All Home Assistant exception strings were checked for translation keys. English
 translations match strings.json; no additional language is claimed. The icon and
@@ -152,14 +152,13 @@ ruff check custom_components tests .github/scripts/check_coverage.py
 ruff format --check custom_components tests .github/scripts/check_coverage.py
 ```
 
-Verified locally: **154 tests passed**, with five dependency deprecation warnings.
-All **19 modules exceed 95% combined line/branch coverage**; the lowest is
-`coordinator.py` at **95.97%**. Config flow and diagnostics remain at **100%**. Strict mypy reports
-**no issues in 19 source files**. A negative type-check probe confirms that an
+Verified locally: **161 tests passed** against Home Assistant 2026.8.0 and
+2026.11.0. All **19 modules have 100% line and branch coverage**. Strict mypy
+reports **no issues in 19 source files**. A negative type-check probe confirms that an
 invalid API search argument is rejected instead of being treated as `Any`. Ruff lint/format,
 whitespace, translation consistency and all 54 checklist entries passed checks.
-The coverage gate also correctly rejects an exactly-95% module, a missing module,
-or incomplete diagnostics coverage. README YAML/template syntax and public
+The coverage gate rejects any uncovered line or branch, a missing module, or a
+report without branch data. README YAML/template syntax and public
 exception translation keys were checked.
 
 All API traffic in tests is mocked. These checks do not deploy or reload the live

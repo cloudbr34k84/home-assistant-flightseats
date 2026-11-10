@@ -1,6 +1,7 @@
 """End-to-end tests: setup, quota protection, events and failure handling."""
 
-from unittest.mock import patch
+from datetime import datetime, timezone
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -11,6 +12,7 @@ from homeassistant.helpers import issue_registry as ir
 
 from custom_components.ha_flightseats.api import RateLimit
 from custom_components.ha_flightseats.const import DOMAIN, ISSUE_NOT_GOLD
+from custom_components.ha_flightseats.coordinator import WatchData
 
 from .conftest import SEARCH_URL, flight, payload, rate_headers, setup_entry
 
@@ -88,6 +90,33 @@ async def test_restart_costs_no_requests(
     assert len(aioclient_mock.mock_calls) == 1  # restored from storage, not polled
     assert hass.states.get(BEST_POINTS).state == "190000"
     assert hass.states.get(SEATS).state == "on"
+
+
+async def test_coordinator_restore_and_scheduling_edge_cases(
+    hass: HomeAssistant, aioclient_mock, mock_entry
+):
+    await setup_entry(hass, mock_entry, aioclient_mock, payload(flight()))
+    coordinator = _coordinator(mock_entry)
+
+    assert not coordinator._is_fresh(WatchData([], {}, None, 0, True))
+    coordinator._store.set_watch(coordinator.subentry_id, {"fetched_at": "bad"})
+    assert coordinator._restore() is None
+    coordinator._store.set_watch(
+        coordinator.subentry_id,
+        {"fetched_at": "2027-01-01T00:00:00", "matches": []},
+    )
+    restored = coordinator._restore()
+    assert restored is not None
+    assert restored.fetched_at == datetime(2027, 1, 1, tzinfo=timezone.utc)
+
+    with patch.object(
+        type(mock_entry.runtime_data.budget),
+        "reset_at",
+        new_callable=PropertyMock,
+        return_value=None,
+    ):
+        coordinator._schedule_catch_up()
+    assert coordinator._catch_up_unsub is None
 
 
 async def test_new_availability_event(hass: HomeAssistant, aioclient_mock, mock_entry):

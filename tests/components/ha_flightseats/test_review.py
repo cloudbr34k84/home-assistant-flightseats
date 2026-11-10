@@ -21,7 +21,11 @@ from custom_components.ha_flightseats.const import CONF_INTERVAL_HOURS
 from custom_components.ha_flightseats.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from custom_components.ha_flightseats.sensor import WATCH_SENSORS
+from custom_components.ha_flightseats.sensor import (
+    ACCOUNT_SENSORS,
+    WATCH_SENSORS,
+    FlightSeatsAccountSensor,
+)
 from custom_components.ha_flightseats.storage import FlightSeatsStore
 
 from .conftest import SEARCH_URL, WATCH_DATA, flight, payload, setup_entry
@@ -50,6 +54,15 @@ def test_invalid_nested_lists(field, value):
     raw = flight()
     raw[field] = value
     assert Flight.from_dict(raw) is None
+
+
+def test_flight_rejects_non_mapping_and_normalises_naive_last_seen():
+    assert Flight.from_dict(None) is None
+    raw = flight(last_seen="2027-02-01T03:04:05")
+    parsed = Flight.from_dict(raw)
+    assert parsed is not None
+    assert parsed.last_seen is not None
+    assert parsed.last_seen.tzinfo is not None
 
 
 async def test_server_messages_are_not_exposed(hass, aioclient_mock):
@@ -81,6 +94,9 @@ async def test_attributes_are_json_safe(hass, mock_entry, aioclient_mock):
     coordinator = next(iter(mock_entry.runtime_data.coordinators.values()))
     for description in WATCH_SENSORS:
         json.dumps(description.attrs_fn(coordinator.data), allow_nan=False)
+
+    # A detached account entity must ignore listener updates safely.
+    FlightSeatsAccountSensor(mock_entry, ACCOUNT_SENSORS[0])._handle_update()
 
 
 async def test_expiry_precedes_fresh_cache(hass, mock_entry, aioclient_mock):

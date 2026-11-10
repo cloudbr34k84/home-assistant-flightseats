@@ -1,5 +1,7 @@
 """Tests for the shared request budget."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from custom_components.ha_flightseats.api import RateLimit
@@ -64,10 +66,36 @@ async def test_state_round_trip_and_listener():
     budget.update(RateLimit(limit=200, remaining=150, reset=4_102_444_800))
     assert calls == [1]
     remove()
+    remove()  # Unsubscribing twice is harmless.
     budget.update(RateLimit(limit=200, remaining=149, reset=4_102_444_800))
     assert calls == [1]
     restored = QuotaBudget(budget.as_dict())
     assert restored.remaining == 149
+
+
+async def test_request_spacing_waits_for_the_remaining_window():
+    budget = QuotaBudget()
+    budget._last_monotonic = 99.0
+    with (
+        patch("custom_components.ha_flightseats.budget.MIN_REQUEST_SPACING", 7),
+        patch(
+            "custom_components.ha_flightseats.budget.time.monotonic", return_value=100.0
+        ),
+        patch(
+            "custom_components.ha_flightseats.budget.asyncio.sleep", new=AsyncMock()
+        ) as sleep,
+    ):
+        await budget.acquire()
+    sleep.assert_awaited_once_with(6.0)
+
+
+def test_partial_rate_limit_updates_and_missing_429_headers():
+    budget = QuotaBudget()
+    budget.update(RateLimit())
+    assert budget.limit == 200
+    assert budget.remaining is None
+    budget.rate_limited(None)
+    assert budget.remaining == 0
 
 
 async def test_remaining_unknown_until_api_confirms():

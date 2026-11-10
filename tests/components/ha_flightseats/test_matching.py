@@ -129,3 +129,14 @@ def test_count_permutations():
         )
         == 365
     )
+    assert (
+        count_permutations(
+            1,
+            1,
+            days_ahead=None,
+            date_from=None,
+            date_to=date(2027, 1, 10),
+            today=today,
+        )
+        == 10
+    )

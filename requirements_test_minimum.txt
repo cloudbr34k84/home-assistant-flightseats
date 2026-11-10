@@ -1,0 +1,3 @@
+# Minimum supported Home Assistant test environment.
+# pytest-homeassistant-custom-component 0.13.354 pins Home Assistant 2026.8.0.
+pytest-homeassistant-custom-component==0.13.354

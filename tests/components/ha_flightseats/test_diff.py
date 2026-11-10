@@ -162,3 +162,14 @@ def test_price_drop():
         state, _m(flight(points=210000)), complete=True, cooldown=COOLDOWN, now=T0
     )
     assert events == []  # increases are not events
+
+
+def test_invalid_and_expired_cooldown_entries_are_pruned():
+    state = empty_state()
+    state["baselined"] = True
+    state["last_fired"] = {
+        "invalid": "not-a-date",
+        "expired": (T0 - timedelta(days=8)).isoformat(),
+    }
+    state, _ = diff_matches(state, [], complete=True, cooldown=COOLDOWN, now=T0)
+    assert state["last_fired"] == {}
