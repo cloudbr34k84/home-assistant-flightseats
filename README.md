@@ -1,4 +1,6 @@
-<p align="center"><img src="FlightSeats.io%20Home%20Assistant%20Integration.png" alt="FlightSeats.io for Home Assistant"></p>
+<p align="center">
+  <img src="FlightSeats.io%20Home%20Assistant%20Integration.png" alt="FlightSeats.io for Home Assistant banner" width="100%">
+</p>
 
 # FlightSeats.io for Home Assistant
 
